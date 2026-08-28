@@ -1,0 +1,40 @@
+﻿# Python & Virtual Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Databases & Local State
+*.db
+*.sqlite
+*.sqlite3
+voice_test_out.txt
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.npm/
+
+# Environment variables & secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+rag/db/
