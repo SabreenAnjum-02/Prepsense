@@ -6,12 +6,10 @@ from .routes import router
 
 from contextlib import asynccontextmanager
 from database.connection import db_manager, redis_manager
+from shared.logging import setup_production_logging
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+setup_production_logging()
 logger = logging.getLogger("prepsense.api")
 
 

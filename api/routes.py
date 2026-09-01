@@ -1,9 +1,20 @@
 import logging
 import io
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 from agents.shared.roles import RoleArchetype, ROLE_BLUEPRINTS
 from agents.planner.topic_selector import TopicSelector
+from sqlalchemy.future import select
+
+from .auth import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    get_current_candidate,
+    get_db_session
+)
+from database.models import CandidateORM
 from .schemas import (
     HealthResponse,
     ResumeUploadResponse,
@@ -19,14 +30,61 @@ from .schemas import (
     PracticalSubmitRequest,
     PracticalSubmitResponse,
     FinalReportResponse,
-    QuestionData
+    QuestionData,
+    CandidateRegisterRequest,
+    TokenResponse
 )
 from .session_manager import SessionManager
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 session_mgr = SessionManager()
+
+
+@router.post("/auth/register", response_model=TokenResponse)
+async def register_candidate(request: CandidateRegisterRequest, db: AsyncSession = Depends(get_db_session)):
+    stmt = select(CandidateORM).where(CandidateORM.email == request.email)
+    res = await db.execute(stmt)
+    if res.scalars().first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+        
+    hashed_password = get_password_hash(request.password)
+    new_candidate = CandidateORM(
+        name=request.name,
+        email=request.email,
+        password_hash=hashed_password,
+        target_role=request.target_role or "Software Engineer"
+    )
+    db.add(new_candidate)
+    await db.commit()
+    await db.refresh(new_candidate)
+    
+    access_token = create_access_token(data={"sub": new_candidate.email})
+    return TokenResponse(
+        access_token=access_token,
+        candidate_id=new_candidate.id,
+        name=new_candidate.name
+    )
+
+
+@router.post("/auth/login", response_model=TokenResponse)
+async def login_candidate(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db_session)):
+    stmt = select(CandidateORM).where(CandidateORM.email == form_data.username)
+    res = await db.execute(stmt)
+    candidate = res.scalars().first()
+    
+    if not candidate or not verify_password(form_data.password, candidate.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+        
+    access_token = create_access_token(data={"sub": candidate.email})
+    return TokenResponse(
+        access_token=access_token,
+        candidate_id=candidate.id,
+        name=candidate.name
+    )
+
 
 
 @router.get("/health", response_model=HealthResponse)

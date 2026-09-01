@@ -36,8 +36,9 @@ class CandidateORM(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    target_role: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    target_role: Mapped[str] = mapped_column(String(100), nullable=False, default="Software Engineer")
     experience_years: Mapped[int] = mapped_column(Integer, default=2)
     skills: Mapped[List[str]] = mapped_column(JSON, default=list)
     projects: Mapped[List[str]] = mapped_column(JSON, default=list)

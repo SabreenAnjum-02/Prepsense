@@ -179,3 +179,16 @@ class FinalReportResponse(BaseModel):
     improvement_plan: List[str] = Field(default_factory=list)
     practical_evaluation: Optional[Dict[str, Any]] = None
 
+
+
+class CandidateRegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    target_role: Optional[str] = 'Software Engineer'
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = 'bearer'
+    candidate_id: str
+    name: str
