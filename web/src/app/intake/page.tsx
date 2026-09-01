@@ -99,11 +99,10 @@ export default function IntakePage() {
     setError(null)
     try {
       const session = await api.createSession({
-        candidate_name: candidateName,
+        candidate_name: candidateName || 'Candidate',
         candidate_email: candidateEmail || 'candidate@example.com',
         target_role: targetRole,
-        skills: skills.length > 0 ? skills : ['Software Engineering', 'System Design'],
-        experience_years: experienceYears,
+        resume_text: jdResult ? jdResult.role_blueprint_summary : (file ? 'Resume provided.' : ''),
         job_description: jobDescription
       })
 
