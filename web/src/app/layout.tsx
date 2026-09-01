@@ -35,9 +35,6 @@ export default function RootLayout({
                   <span className="text-lg font-black tracking-tight text-white group-hover:text-emerald-300 transition-colors">
                     PREPSENSE
                   </span>
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                    v2.0 Enterprise
-                  </span>
                 </div>
                 <p className="text-[10px] text-slate-500 font-medium tracking-wide">Autonomous Assessment Engine</p>
               </div>
