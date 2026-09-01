@@ -1,12 +1,18 @@
 import logging
 import asyncio
 import numpy as np
-import sounddevice as sd
+
+logger = logging.getLogger(__name__)
+
+try:
+    import sounddevice as sd
+except OSError:
+    sd = None
+    logger.warning("sounddevice could not be imported (likely missing PortAudio in Docker). Local microphone recording will be disabled.")
+
 import time
 from shared.config import VoiceConfig
 from voice.vad import SileroVADWrapper
-
-logger = logging.getLogger(__name__)
 
 class AudioRecorder:
     """Asynchronous audio recorder that integrates with VAD for hands-free listening."""
