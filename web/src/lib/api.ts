@@ -124,9 +124,18 @@ export interface FinalReport {
   practical_evaluation?: any;
 }
 
+// Helper to add auth header
+const getHeaders = (extraHeaders: Record<string, string> = {}) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('prepsense_token') : null;
+  return {
+    ...extraHeaders,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
+
 export const api = {
   async getHealth() {
-    const res = await fetch(`${API_BASE}/health`);
+    const res = await fetch(`${API_BASE}/health`, { headers: getHeaders() });
     return res.json();
   },
 
@@ -136,6 +145,7 @@ export const api = {
     if (targetRole) formData.append('target_role', targetRole);
     const res = await fetch(`${API_BASE}/resume/upload`, {
       method: 'POST',
+      headers: getHeaders(), // Don't set Content-Type for FormData, browser does it with boundary
       body: formData,
     });
     if (!res.ok) throw new Error('Resume parsing failed.');
@@ -145,14 +155,14 @@ export const api = {
   async matchJD(jobDescription: string, resumeSkills: string[], targetRole?: string): Promise<JDMatchResult> {
     const res = await fetch(`${API_BASE}/jd/match`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         job_description: jobDescription,
         resume_skills: resumeSkills,
-        target_role: targetRole
+        target_role: targetRole,
       }),
     });
-    if (!res.ok) throw new Error('Job description matching failed.');
+    if (!res.ok) throw new Error('Failed to match JD.');
     return res.json();
   },
 
@@ -160,13 +170,12 @@ export const api = {
     candidate_name: string;
     candidate_email: string;
     target_role: string;
-    skills: string[];
-    experience_years: number;
+    resume_text: string;
     job_description?: string;
   }): Promise<SessionInit> {
-    const res = await fetch(`${API_BASE}/assessment/create`, {
+    const res = await fetch(`${API_BASE}/assessment/session`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to create assessment session.');
@@ -174,7 +183,10 @@ export const api = {
   },
 
   async startInterview(sessionId: string): Promise<{ session_id: string; current_question: QuestionData; stage: string }> {
-    const res = await fetch(`${API_BASE}/assessment/${sessionId}/start`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/assessment/${sessionId}/start`, { 
+      method: 'POST',
+      headers: getHeaders()
+    });
     if (!res.ok) throw new Error('Failed to start interview.');
     return res.json();
   },
@@ -182,7 +194,7 @@ export const api = {
   async submitAnswer(sessionId: string, answerText: string): Promise<SubmitAnswerResult> {
     const res = await fetch(`${API_BASE}/assessment/${sessionId}/respond`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ answer_text: answerText }),
     });
     if (!res.ok) throw new Error('Failed to submit answer.');
@@ -190,7 +202,7 @@ export const api = {
   },
 
   async getPracticalTask(sessionId: string): Promise<PracticalTask> {
-    const res = await fetch(`${API_BASE}/assessment/${sessionId}/practical`);
+    const res = await fetch(`${API_BASE}/assessment/${sessionId}/practical`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to load practical task.');
     return res.json();
   },
@@ -198,7 +210,7 @@ export const api = {
   async submitPractical(sessionId: string, code: string, language?: string): Promise<PracticalSubmitResult> {
     const res = await fetch(`${API_BASE}/assessment/${sessionId}/practical/submit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ submission_code: code, language }),
     });
     if (!res.ok) throw new Error('Failed to evaluate practical submission.');
@@ -206,13 +218,13 @@ export const api = {
   },
 
   async getSessionState(sessionId: string): Promise<any> {
-    const res = await fetch(`${API_BASE}/assessment/${sessionId}/state`);
+    const res = await fetch(`${API_BASE}/assessment/${sessionId}/state`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch session state.');
     return res.json();
   },
 
   async getFinalReport(sessionId: string): Promise<FinalReport> {
-    const res = await fetch(`${API_BASE}/assessment/${sessionId}/report`);
+    const res = await fetch(`${API_BASE}/assessment/${sessionId}/report`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch final report.');
     return res.json();
   }

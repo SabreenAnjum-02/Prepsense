@@ -66,12 +66,14 @@ export default function LandingPage() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-          <Link
-            href="/intake"
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm flex items-center justify-center gap-3 shadow-xl shadow-emerald-600/25 transition-all group"
+          <Link 
+            href="/auth" 
+            className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-slate-900 bg-teal-400 rounded-full overflow-hidden transition-transform hover:scale-105"
           >
-            <span>Launch Candidate Assessment</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
+            <span className="relative flex items-center gap-2">
+              Start Practice Interview
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </span>
           </Link>
           <a
             href="http://localhost:8000/docs"

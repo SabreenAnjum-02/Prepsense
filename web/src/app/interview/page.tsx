@@ -204,7 +204,8 @@ function InterviewVideoContent() {
       if (wsHost.includes('3000')) {
           wsHost = wsHost.replace('3000', '8000');
       }
-      const wsUrl = `${protocol}//${wsHost}/api/ws/interview/${sessionId}/audio`;
+      const token = localStorage.getItem('prepsense_token');
+      const wsUrl = `${protocol}//${wsHost}/api/ws/interview/${sessionId}/audio${token ? `?token=${token}` : ''}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
