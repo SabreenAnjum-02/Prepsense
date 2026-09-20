@@ -42,6 +42,9 @@ services:
       # - GEMINI_API_KEY=your_api_key_here
     volumes:
       - ./rag/db:/app/rag/db
+      - ./api:/app/api
+      - ./voice:/app/voice
+      - ./agents:/app/agents
     
   frontend:
     build:

@@ -64,31 +64,31 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
+    <div className="flex-1 flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center text-teal-400 mb-6">
+        <div className="flex justify-center text-blue-600 mb-6">
           <Camera className="w-10 h-10 mr-2" />
           <Mic className="w-10 h-10" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
-          PrepSense AI
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
+          PrepSense Enterprise
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-400">
-          Your Intelligent Interview Copilot
+        <p className="mt-2 text-center text-sm text-slate-500">
+          Secure Authentication Portal
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-slate-800 py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-slate-700">
-          <div className="flex justify-between mb-8 border-b border-slate-700 pb-2">
+        <div className="bg-white py-8 px-4 shadow-xl shadow-slate-200/50 sm:rounded-2xl sm:px-10 border border-slate-200">
+          <div className="flex justify-between mb-8 border-b border-slate-200 pb-2">
             <button
-              className={`text-lg font-medium transition-colors ${isLogin ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-400 hover:text-white'}`}
+              className={`text-lg font-medium transition-colors ${isLogin ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
               onClick={() => { setIsLogin(true); setError(''); }}
             >
               Sign In
             </button>
             <button
-              className={`text-lg font-medium transition-colors ${!isLogin ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-400 hover:text-white'}`}
+              className={`text-lg font-medium transition-colors ${!isLogin ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
               onClick={() => { setIsLogin(false); setError(''); }}
             >
               Register
@@ -96,7 +96,7 @@ export default function AuthPage() {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded mb-6 text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm">
               {error}
             </div>
           )}
@@ -105,15 +105,15 @@ export default function AuthPage() {
             {!isLogin && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Full Name</label>
+                  <label className="block text-sm font-medium text-slate-700">Full Name</label>
                   <div className="mt-1 relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-slate-500" />
+                      <User className="h-5 w-5 text-slate-400" />
                     </div>
                     <input
                       type="text"
                       required
-                      className="block w-full pl-10 bg-slate-900 border border-slate-700 rounded-md py-2 text-white placeholder-slate-500 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                      className="block w-full pl-10 bg-white border border-slate-300 rounded-lg py-2.5 text-slate-900 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
                       placeholder="John Doe"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -122,10 +122,10 @@ export default function AuthPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300">Target Role</label>
+                  <label className="block text-sm font-medium text-slate-700">Target Role</label>
                   <div className="mt-1 relative rounded-md shadow-sm">
                     <select
-                      className="block w-full bg-slate-900 border border-slate-700 rounded-md py-2 px-3 text-white focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                      className="block w-full bg-white border border-slate-300 rounded-lg py-2.5 px-3 text-slate-900 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
                       value={formData.target_role}
                       onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
                     >
@@ -140,15 +140,15 @@ export default function AuthPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Email address</label>
+              <label className="block text-sm font-medium text-slate-700">Email address</label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-500" />
+                  <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="email"
                   required
-                  className="block w-full pl-10 bg-slate-900 border border-slate-700 rounded-md py-2 text-white placeholder-slate-500 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full pl-10 bg-white border border-slate-300 rounded-lg py-2.5 text-slate-900 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
                   placeholder="you@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -157,15 +157,15 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300">Password</label>
+              <label className="block text-sm font-medium text-slate-700">Password</label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-500" />
+                  <Lock className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="password"
                   required
-                  className="block w-full pl-10 bg-slate-900 border border-slate-700 rounded-md py-2 text-white placeholder-slate-500 focus:ring-teal-500 focus:border-teal-500 sm:text-sm"
+                  className="block w-full pl-10 bg-white border border-slate-300 rounded-lg py-2.5 text-slate-900 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -177,7 +177,7 @@ export default function AuthPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-slate-900 bg-teal-400 hover:bg-teal-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:opacity-50"
+                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-md shadow-blue-500/20 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50"
               >
                 {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
                 {!loading && <ArrowRight className="ml-2 w-4 h-4" />}

@@ -121,34 +121,34 @@ export default function IntakePage() {
     <div className="max-w-5xl mx-auto space-y-8 py-4 animate-fadeIn">
       {/* Title Header */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-semibold border border-blue-200">
           <Zap className="w-3.5 h-3.5" />
           <span>Candidate Intake & Blueprint Matching</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Configure Assessment Session</h1>
-        <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Configure Assessment Session</h1>
+        <p className="text-xs sm:text-sm text-slate-500 max-w-xl mx-auto">
           Upload a candidate resume or specify the target role to ground the adaptive interview question tree.
         </p>
       </div>
 
       {error && (
-        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center justify-between shadow-lg">
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-xs flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
-          <button onClick={() => setError(null)} className="text-[11px] underline hover:text-rose-300">Dismiss</button>
+          <button onClick={() => setError(null)} className="text-[11px] underline hover:text-red-700">Dismiss</button>
         </div>
       )}
 
       {/* Step 1: Target Role Selection Grid */}
-      <div className="p-6 rounded-3xl bg-slate-900/70 border border-slate-800 space-y-4 shadow-xl">
+      <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 shadow-xl shadow-slate-200/40">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-mono">1</span>
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-mono">1</span>
             <span>Select Authoritative Target Role</span>
           </h2>
-          <span className="text-xs text-slate-400">Controls 100% of the interview question domain</span>
+          <span className="text-xs text-slate-500">Controls 100% of the interview question domain</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -162,15 +162,15 @@ export default function IntakePage() {
                 onClick={() => setTargetRole(r.title)}
                 className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all ${
                   isSelected
-                    ? 'bg-emerald-950/60 border-emerald-500 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500'
-                    : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
+                    ? 'bg-blue-50 border-blue-600 shadow-md shadow-blue-500/10 ring-1 ring-blue-600'
+                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
                 }`}
               >
-                <div className={`p-2 rounded-xl shrink-0 ${isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                <div className={`p-2 rounded-xl shrink-0 ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="space-y-0.5">
-                  <div className={`text-xs font-bold ${isSelected ? 'text-emerald-300' : 'text-slate-200'}`}>{r.title}</div>
+                  <div className={`text-xs font-bold ${isSelected ? 'text-blue-800' : 'text-slate-700'}`}>{r.title}</div>
                   <div className="text-[10px] text-slate-500 font-mono">{r.badge}</div>
                 </div>
               </button>
@@ -181,14 +181,14 @@ export default function IntakePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Step 2: Resume Intake & Profile */}
-        <div className="p-6 rounded-3xl bg-slate-900/70 border border-slate-800 space-y-4 shadow-xl">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center text-xs font-mono">2</span>
+        <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 shadow-xl shadow-slate-200/40">
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-mono">2</span>
             <span>Candidate Dossier & Resume</span>
           </h2>
 
           {/* Upload Dropzone */}
-          <div className="relative border-2 border-dashed border-slate-700/80 hover:border-emerald-500/60 rounded-2xl p-6 text-center transition-all bg-slate-950/40">
+          <div className="relative border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center transition-all bg-slate-50 hover:bg-blue-50/50">
             <input
               type="file"
               accept=".pdf,.txt,.docx"
@@ -196,10 +196,10 @@ export default function IntakePage() {
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             <div className="space-y-2">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
+              <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto">
                 {parsing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
               </div>
-              <div className="text-xs font-bold text-slate-200">
+              <div className="text-xs font-bold text-slate-700">
                 {file ? file.name : 'Click or Drag & Drop Candidate Resume (PDF / TXT)'}
               </div>
               <p className="text-[11px] text-slate-500">Automatically extracts projects, skills, and seniority</p>
@@ -208,7 +208,7 @@ export default function IntakePage() {
 
           <div className="space-y-3 pt-2">
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-slate-400" />
                 <span>Candidate Full Name</span>
               </label>
@@ -217,12 +217,12 @@ export default function IntakePage() {
                 value={candidateName}
                 onChange={(e) => setCandidateName(e.target.value)}
                 placeholder="e.g. Alex Rivera"
-                className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 shadow-sm text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-slate-400" />
                 <span>Candidate Email</span>
               </label>
@@ -231,16 +231,16 @@ export default function IntakePage() {
                 value={candidateEmail}
                 onChange={(e) => setCandidateEmail(e.target.value)}
                 placeholder="alex.rivera@example.com"
-                className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 shadow-sm text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
               />
             </div>
 
             {skills.length > 0 && (
               <div className="space-y-1.5">
-                <span className="text-xs font-semibold text-slate-400">Extracted Skills & Technologies:</span>
+                <span className="text-xs font-semibold text-slate-500">Extracted Skills & Technologies:</span>
                 <div className="flex flex-wrap gap-1.5">
                   {skills.map((s, idx) => (
-                    <span key={idx} className="text-[11px] px-2.5 py-0.5 rounded-md bg-slate-800 text-emerald-300 border border-slate-700">
+                    <span key={idx} className="text-[11px] px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
                       {s}
                     </span>
                   ))}
@@ -251,11 +251,11 @@ export default function IntakePage() {
         </div>
 
         {/* Step 3: Optional Job Description Matcher */}
-        <div className="p-6 rounded-3xl bg-slate-900/70 border border-slate-800 space-y-4 shadow-xl flex flex-col justify-between">
+        <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 shadow-xl shadow-slate-200/40 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-mono">3</span>
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-mono">3</span>
                 <span>Job Description Alignment (Optional)</span>
               </h2>
             </div>
@@ -265,30 +265,30 @@ export default function IntakePage() {
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
               placeholder="Paste job description requirements to tailor technical stage questions..."
-              className="w-full p-3.5 rounded-2xl bg-slate-950 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors resize-none leading-relaxed"
+              className="w-full p-3.5 rounded-2xl bg-white border border-slate-300 shadow-sm text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-none leading-relaxed"
             />
 
             <button
               type="button"
               onClick={handleMatchJD}
               disabled={matching || !jobDescription.trim()}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-bold flex items-center justify-center gap-2 border border-slate-700 transition-colors disabled:opacity-40"
+              className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-50 text-blue-600 text-xs font-bold flex items-center justify-center gap-2 border border-slate-300 shadow-sm transition-colors disabled:opacity-40"
             >
               {matching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               <span>Analyze Job Description Alignment</span>
             </button>
 
             {jdResult && (
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs animate-fadeIn">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs animate-fadeIn">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Match Confidence:</span>
-                  <span className="font-mono font-extrabold text-emerald-400">{jdResult.match_score}%</span>
+                  <span className="text-slate-600">Match Confidence:</span>
+                  <span className="font-mono font-extrabold text-blue-600">{jdResult.match_score}%</span>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[11px] text-slate-400">Target Competencies:</span>
+                  <span className="text-[11px] text-slate-500">Target Competencies:</span>
                   <div className="flex flex-wrap gap-1">
                     {jdResult.matched_competencies.map((m, idx) => (
-                      <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                         {m}
                       </span>
                     ))}
@@ -298,12 +298,12 @@ export default function IntakePage() {
             )}
           </div>
 
-          <div className="pt-4 border-t border-slate-800/80">
+          <div className="pt-4 border-t border-slate-200">
             <button
               type="button"
               onClick={handleStartAssessment}
               disabled={creating || !candidateName.trim()}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/25 transition-all disabled:opacity-40"
+              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-40"
             >
               {creating ? (
                 <>

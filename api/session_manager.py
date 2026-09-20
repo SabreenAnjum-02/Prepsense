@@ -162,17 +162,21 @@ class SessionManager:
         try:
             async with db_manager.session() as sess:
                 cand_repo = CandidateRepository(sess)
-                cand_orm = await cand_repo.create(
-                    name=candidate_name,
-                    email=candidate_email,
-                    target_role=target_role,
-                    experience_years=experience_years,
-                    skills=skills,
-                    projects=projects or [],
-                    experience=experience or [],
-                    target_jd=job_description
-                )
-                candidate_id = cand_orm.id
+                existing_cand = await cand_repo.get_by_email(candidate_email)
+                if existing_cand:
+                    candidate_id = existing_cand.id
+                else:
+                    cand_orm = await cand_repo.create(
+                        name=candidate_name,
+                        email=candidate_email,
+                        target_role=target_role,
+                        experience_years=experience_years,
+                        skills=skills,
+                        projects=projects or [],
+                        experience=experience or [],
+                        target_jd=job_description
+                    )
+                    candidate_id = cand_orm.id
 
                 sess_repo = SessionRepository(sess)
                 await sess_repo.create(
@@ -182,6 +186,7 @@ class SessionManager:
                     status="CREATED",
                     current_stage="INTRODUCTION"
                 )
+                await sess.commit()
         except Exception as e:
             logger.error(f"SessionManager: PostgreSQL write failed during create_session: {e}")
             # Do not crash if DB temporarily in maintenance mode; proceed with distributed/in-memory
@@ -274,6 +279,7 @@ class SessionManager:
                     current_stage=q_stage,
                     current_question_index=len(context.questions)
                 )
+                await sess.commit()
         except Exception as e:
             logger.error(f"SessionManager: PostgreSQL turn write failed during start_interview: {e}")
 
@@ -444,6 +450,7 @@ class SessionManager:
                     current_question_index=len(context.questions),
                     is_interview_completed=is_completed
                 )
+                await sess.commit()
         except Exception as e:
             logger.error(f"SessionManager: PostgreSQL turn/eval update failed: {e}")
 
@@ -563,6 +570,7 @@ class SessionManager:
                     session_id=session_id,
                     is_practical_completed=True
                 )
+                await sess.commit()
         except Exception as e:
             logger.error(f"SessionManager: PostgreSQL practical evaluation write failed: {e}")
 
@@ -703,8 +711,10 @@ class SessionManager:
                     weaknesses=report.weaknesses,
                     improvement_plan=report.improvement_plan
                 )
+                await sess.commit()
         except Exception as e:
             logger.error(f"SessionManager: PostgreSQL report write failed: {e}")
 
         session["cached_report"] = final_response
         return final_response
+

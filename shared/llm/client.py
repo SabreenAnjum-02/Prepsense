@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+import os
 # Need to gracefully handle lack of aiohttp in this minimal mock setup, but ideally this is used
 try:
     import aiohttp
@@ -122,8 +123,8 @@ class _JsonStringExtractor:
 class OllamaClient:
     """Asynchronous client for interacting with a local Ollama LLM instance."""
     
-    def __init__(self, base_url: str = "http://localhost:11434"):
-        self.base_url = base_url
+    def __init__(self, base_url: str = "http://host.docker.internal:11434"):
+        self.base_url = os.getenv("OLLAMA_URL", base_url)
         self.model = config.model.model_name
         self._ensure_aiohttp()
 

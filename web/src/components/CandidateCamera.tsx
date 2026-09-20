@@ -1,17 +1,15 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Camera, CameraOff, Mic, MicOff, User } from 'lucide-react'
+import { Camera, CameraOff, User } from 'lucide-react'
 
 interface CandidateCameraProps {
   isCandidateSpeaking?: boolean
 }
 
 export function CandidateCamera({ isCandidateSpeaking = false }: CandidateCameraProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [isCameraOn, setIsCameraOn] = useState<boolean>(true)
-  const [isMicOn, setIsMicOn] = useState<boolean>(true)
   const [hasPermission, setHasPermission] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -21,16 +19,16 @@ export function CandidateCamera({ isCandidateSpeaking = false }: CandidateCamera
       try {
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const s = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 640 }, height: { ideal: 360 } },
-            audio: true
+            video: { 
+              width: { ideal: 1280 }, 
+              height: { ideal: 720 },
+              frameRate: { ideal: 30, max: 30 }
+            },
+            audio: false
           })
           activeStream = s
           setStream(s)
           setHasPermission(true)
-
-          if (videoRef.current) {
-            videoRef.current.srcObject = s
-          }
         }
       } catch (err) {
         console.warn('Webcam permission not granted or unavailable:', err)
@@ -48,30 +46,26 @@ export function CandidateCamera({ isCandidateSpeaking = false }: CandidateCamera
   }, [])
 
   const toggleCamera = () => {
-    if (!stream) return
-    const videoTracks = stream.getVideoTracks()
-    if (videoTracks.length > 0) {
-      videoTracks[0].enabled = !videoTracks[0].enabled
-      setIsCameraOn(videoTracks[0].enabled)
-    }
-  }
-
-  const toggleMic = () => {
-    if (!stream) return
-    const audioTracks = stream.getAudioTracks()
-    if (audioTracks.length > 0) {
-      audioTracks[0].enabled = !audioTracks[0].enabled
-      setIsMicOn(audioTracks[0].enabled)
+    if (stream) {
+      const videoTracks = stream.getVideoTracks()
+      videoTracks.forEach(track => {
+        track.enabled = !isCameraOn
+      })
+      setIsCameraOn(!isCameraOn)
     }
   }
 
   return (
     <div className={`relative w-full aspect-video rounded-2xl overflow-hidden bg-slate-900 border transition-all duration-300 shadow-xl ${
-      isCandidateSpeaking ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-slate-800/80'
+      isCandidateSpeaking ? 'border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'border-slate-800/80'
     }`}>
       {hasPermission && isCameraOn ? (
         <video
-          ref={videoRef}
+          ref={(node) => {
+            if (node && stream) {
+              node.srcObject = stream
+            }
+          }}
           autoPlay
           playsInline
           muted
@@ -85,26 +79,22 @@ export function CandidateCamera({ isCandidateSpeaking = false }: CandidateCamera
         </div>
       )}
 
-      {/* Floating Name Badge */}
+      {/* Floating Name Badge and LIVE indicator */}
       <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
         <div className="px-3 py-1 rounded-full bg-slate-900/60 backdrop-blur-md border border-slate-700/50 text-[11px] font-medium text-slate-200 flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isCandidateSpeaking ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+          <div className={`w-2 h-2 rounded-full ${isCandidateSpeaking ? 'bg-blue-400 animate-pulse' : 'bg-slate-500'}`} />
           <span>You</span>
         </div>
+        {hasPermission && isCameraOn && (
+          <div className="px-2 py-1 rounded-full bg-rose-500/20 border border-rose-500/30 text-[10px] font-bold text-rose-400 tracking-wider flex items-center gap-1.5 uppercase">
+            <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+            Live Camera
+          </div>
+        )}
       </div>
 
       {/* Floating Controls */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={toggleMic}
-          className={`p-2 rounded-full backdrop-blur-md transition-colors ${
-            isMicOn ? 'bg-slate-900/40 text-white hover:bg-slate-900/60' : 'bg-rose-500/80 text-white'
-          }`}
-        >
-          {isMicOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-        </button>
-
         <button
           type="button"
           onClick={toggleCamera}

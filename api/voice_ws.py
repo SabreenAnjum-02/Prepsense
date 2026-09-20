@@ -45,12 +45,12 @@ def _safe_get_context(session: Any) -> Optional[Any]:
     return getattr(session, "context", None)
 
 def _safe_get_current_question_id(session: Any) -> Optional[str]:
-    context = _safe_get_context(session)
-    if not context:
+    if not isinstance(session, dict):
         return None
-    if isinstance(context, dict):
-        return context.get("current_question_id")
-    return getattr(context, "current_question_id", None)
+    current_q = session.get("current_question")
+    if current_q:
+        return getattr(current_q, "question_id", None)
+    return None
 
 def _safe_get_history(session: Any) -> List[Any]:
     context = _safe_get_context(session)
@@ -137,7 +137,7 @@ class VoicePipelineSession:
             current_turn = _safe_get_current_question_id(session)
             if self.expected_turn_id and current_turn != self.expected_turn_id:
                 logger.warning(f"Duplicate/Stale answer submission. Expected {self.expected_turn_id}, actual DB {current_turn}. Ignoring.")
-                await self.send_state("LISTENING")
+                # We do not change the state here. If it's PROCESSING_TURN, it should stay PROCESSING.
                 return
 
             # Update local turn immediately to prevent overlapping duplicate submissions
@@ -145,7 +145,14 @@ class VoicePipelineSession:
             
             # 3. Evaluate / get next question
             eval_t0 = time.perf_counter()
-            res = await session_mgr.submit_answer(self.session_id, transcript)
+            try:
+                res = await session_mgr.submit_answer(self.session_id, transcript)
+            except ValueError as ve:
+                if "No active question" in str(ve):
+                    logger.warning("Candidate spoke before first question. Ignoring.")
+                    await self.send_state("LISTENING")
+                    return
+                raise
             logger.info(f"Evaluation took {time.perf_counter()-eval_t0:.2f}s")
             
             if res.is_completed:
@@ -172,14 +179,29 @@ class VoicePipelineSession:
         await self.send_state("INTERVIEWER_SPEAKING")
         self.interruption_event.clear()
         
+        from api.config import DEV_MODE
+        if DEV_MODE:
+            logger.info("DEV_MODE active: Sending tts_fallback command to browser.")
+            await self.ws.send_json({
+                "type": "tts_fallback",
+                "text": text
+            })
+            duration = max(2.0, len(text.split()) * 0.4)
+            wait_step = 0.1
+            elapsed = 0.0
+            while elapsed < duration:
+                if self.interruption_event.is_set():
+                    logger.info("TTS (fallback) interrupted by candidate.")
+                    break
+                await asyncio.sleep(wait_step)
+                elapsed += wait_step
+                
+            await self.ws.send_json({"type": "interviewer_speech_end"})
+            if self.state == "INTERVIEWER_SPEAKING":
+                await self.send_state("LISTENING")
+            return
+
         try:
-            from api.config import DEV_MODE
-            if DEV_MODE:
-                await self.ws.send_json({"type": "dev_speak", "text": text})
-                await asyncio.sleep(1.0)
-                if self.state == "INTERVIEWER_SPEAKING":
-                    await self.send_state("LISTENING")
-                return
 
             # Signal TTS start
             await self.ws.send_json({"type": "interviewer_speech_start"})
@@ -323,3 +345,5 @@ async def voice_websocket_endpoint(websocket: WebSocket, session_id: str):
         pipeline.is_connected = False
         if session_id in ACTIVE_SESSIONS:
             del ACTIVE_SESSIONS[session_id]
+
+

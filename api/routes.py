@@ -278,8 +278,8 @@ async def get_session_state(session_id: str):
     if current_q:
         current_q_data = QuestionData(
             question_id=current_q.question_id,
-            question_text=current_q.question_text,
-            stage=current_q.stage.value if hasattr(current_q.stage, "value") else str(current_q.stage),
+            question_text=current_q.question,
+            stage=context.current_stage.value if hasattr(context, "current_stage") and hasattr(context.current_stage, "value") else "INTRODUCTION",
             topic=current_q.topic,
             difficulty=current_q.difficulty,
             question_index=len(context.questions),
@@ -288,13 +288,13 @@ async def get_session_state(session_id: str):
         )
 
     current_stage = "INTRODUCTION"
-    if context.questions:
-        current_stage = context.questions[-1].stage
+    if len(context.questions) > 0:
+        current_stage = "TECHNICAL"
     if session.get("is_interview_completed"):
         current_stage = "PRACTICAL"
 
     recent = [
-        {"question": q.question_text, "topic": q.topic, "stage": q.stage}
+        {"question": q.question, "topic": q.topic, "stage": "TECHNICAL"}
         for q in context.questions[-3:]
     ]
 

@@ -113,7 +113,7 @@ function InterviewVideoContent() {
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null)
   const audioQueueRef = useRef<AudioPlayerQueue>(new AudioPlayerQueue())
   const isMutedRef = useRef<boolean>(false)
   const reconnectAttemptsRef = useRef<number>(0)
@@ -155,9 +155,9 @@ function InterviewVideoContent() {
   }, [hasStartedRoom, isComplete])
 
   const cleanupAudio = () => {
-    if (scriptProcessorRef.current) {
-      scriptProcessorRef.current.disconnect();
-      scriptProcessorRef.current = null;
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect();
+      workletNodeRef.current = null;
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
@@ -191,9 +191,10 @@ function InterviewVideoContent() {
         await audioCtx.resume();
       }
       
+      await audioCtx.audioWorklet.addModule('/worklets/pcm-worker.js');
       const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(2048, 1, 1);
-      scriptProcessorRef.current = processor;
+      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor');
+      workletNodeRef.current = workletNode;
 
       // Initialize Playback Queue with the unified, resumed context
       audioQueueRef.current.init(audioCtx);
@@ -216,23 +217,14 @@ function InterviewVideoContent() {
         setReconnecting(false);
         reconnectAttemptsRef.current = 0;
         // Start streaming audio
-        source.connect(processor);
-        processor.connect(audioCtx.destination);
+        source.connect(workletNode);
+        workletNode.connect(audioCtx.destination);
       };
 
-      processor.onaudioprocess = (e) => {
+      workletNode.port.onmessage = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
         if (isMutedRef.current) return; // Muted, don't send
-
-        const float32Data = e.inputBuffer.getChannelData(0);
-        // Convert float32 to PCM16
-        const int16Data = new Int16Array(float32Data.length);
-        for (let i = 0; i < float32Data.length; i++) {
-          let s = Math.max(-1, Math.min(1, float32Data[i]));
-          int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-        
-        wsRef.current.send(int16Data.buffer);
+        wsRef.current.send(e.data);
       };
 
       ws.onmessage = async (event) => {
@@ -265,7 +257,7 @@ function InterviewVideoContent() {
             else if (msg.type === 'transcript') {
               setLiveTranscript(msg.text);
             }
-            else if (msg.type === 'dev_speak') {
+            else if (msg.type === 'tts_fallback') {
               // DEV_MODE: use native browser TTS instead of streaming audio
               const utter = new SpeechSynthesisUtterance(msg.text);
               utter.lang = 'en-US';
@@ -331,7 +323,7 @@ function InterviewVideoContent() {
       };
       
       ws.onerror = (e) => {
-        console.error("WebSocket error:", e);
+        // Connection error gracefully handled by onclose
       };
 
     } catch (err: any) {
@@ -373,15 +365,15 @@ function InterviewVideoContent() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#050810] space-y-6">
-        <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center">
-            <VolumeX className="w-8 h-8 text-rose-500" />
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 space-y-6">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
+            <VolumeX className="w-8 h-8 text-red-500" />
         </div>
         <div className="text-center space-y-2">
-            <h2 className="text-xl font-bold text-white">Connection Error</h2>
-            <p className="text-sm text-slate-400 max-w-sm">{error}</p>
+            <h2 className="text-xl font-bold text-slate-900">Connection Error</h2>
+            <p className="text-sm text-slate-500 max-w-sm">{error}</p>
         </div>
-        <button onClick={() => window.location.reload()} className="px-6 py-3 rounded-full bg-slate-800 text-white font-medium hover:bg-slate-700 transition-colors">
+        <button onClick={() => window.location.reload()} className="px-6 py-3 rounded-full bg-slate-100 text-slate-900 font-medium hover:bg-slate-200 transition-colors">
           Retry Connection
         </button>
       </div>
@@ -391,47 +383,47 @@ function InterviewVideoContent() {
   // PRE-INTERVIEW BRIEFING
   if (!hasStartedRoom) {
     return (
-      <div className="min-h-screen bg-[#050810] text-slate-200 font-sans selection:bg-emerald-500/30">
+      <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-600/30">
         <div className="max-w-4xl mx-auto px-6 py-20 flex flex-col items-center">
             
-            <div className="text-emerald-400 font-bold tracking-widest text-sm mb-12 flex items-center gap-2">
+            <div className="text-blue-600 font-bold tracking-widest text-sm mb-12 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5" /> PREPSENSE
             </div>
 
-            <div className="w-full bg-slate-900 border border-slate-800/60 rounded-3xl p-10 md:p-14 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/5 blur-[120px] rounded-full pointer-events-none translate-x-1/3 -translate-y-1/3" />
+            <div className="w-full bg-white border border-slate-200/60 rounded-3xl p-10 md:p-14 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none translate-x-1/3 -translate-y-1/3" />
                 
                 <div className="relative z-10 flex flex-col items-center text-center space-y-10">
                     <div className="space-y-4">
-                        <h2 className="text-sm text-slate-400 uppercase tracking-widest font-semibold">AI Technical Interview</h2>
-                        <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-                            Your personalized <span className="text-emerald-400">technical interview</span> is ready.
+                        <h2 className="text-sm text-slate-500 uppercase tracking-widest font-semibold">AI Technical Interview</h2>
+                        <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                            Your personalized <span className="text-blue-600">technical interview</span> is ready.
                         </h1>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl border-y border-slate-800/60 py-8 my-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl border-y border-slate-200/60 py-8 my-8">
                         <div className="flex flex-col items-center space-y-2">
                             <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Role</span>
-                            <span className="text-slate-200 font-medium">{targetRole}</span>
+                            <span className="text-slate-800 font-medium">{targetRole}</span>
                         </div>
                         <div className="flex flex-col items-center space-y-2">
                             <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Estimated Duration</span>
-                            <span className="text-slate-200 font-medium">20–30 minutes</span>
+                            <span className="text-slate-800 font-medium">20–30 minutes</span>
                         </div>
                         <div className="flex flex-col items-center space-y-2">
                             <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Voice Mode</span>
-                            <span className="text-emerald-400 font-medium flex items-center gap-1.5"><Mic className="w-4 h-4"/> Hands-free</span>
+                            <span className="text-blue-600 font-medium flex items-center gap-1.5"><Mic className="w-4 h-4"/> Hands-free</span>
                         </div>
                     </div>
                     
-                    <div className="max-w-xl text-sm text-slate-400 bg-slate-950/50 p-6 rounded-2xl border border-slate-800/80">
+                    <div className="max-w-xl text-sm text-slate-500 bg-slate-50/50 p-6 rounded-2xl border border-slate-200/80">
                         <p>The system listens automatically. No need to click to speak. Please use headphones for the best experience. Microphone access will be requested on the next step.</p>
                     </div>
 
                     <button
                         onClick={handleStartInterviewRoom}
                         disabled={loadingInitial}
-                        className="group flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-full font-bold text-lg transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.4)] disabled:opacity-50"
+                        className="group flex items-center justify-center gap-3 bg-blue-700 hover:bg-blue-600 text-slate-900 px-10 py-4 rounded-full font-bold text-lg transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_40px_rgba(16,185,129,0.4)] disabled:opacity-50"
                     >
                         {loadingInitial ? (
                             <Loader2 className="w-6 h-6 animate-spin" />
@@ -453,27 +445,27 @@ function InterviewVideoContent() {
   const currentStageIndex = sessionStages.findIndex(s => s === question?.stage)
 
   return (
-    <div className="min-h-screen bg-[#050810] text-slate-200 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
         {/* TOP NAVIGATION BAR */}
-        <header className="h-16 px-6 border-b border-slate-800/60 bg-slate-900/50 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2 font-bold tracking-widest text-emerald-400">
+        <header className="h-16 px-6 border-b border-slate-200/60 bg-white/50 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2 font-bold tracking-widest text-blue-600">
                 <ShieldCheck className="w-5 h-5" />
                 <span className="hidden sm:inline">PREPSENSE</span>
             </div>
             
-            <div className="text-sm font-semibold text-slate-300">
+            <div className="text-sm font-semibold text-slate-400">
                 AI Technical Interview
             </div>
 
             <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950 border border-slate-800">
-                    <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : reconnecting ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} />
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:inline">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200">
+                    <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-blue-600 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : reconnecting ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider hidden sm:inline">
                         {wsConnected ? 'Connected' : reconnecting ? 'Reconnecting' : 'Disconnected'}
                     </span>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
-                    <span className="text-xs font-bold text-slate-300">You</span>
+                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center">
+                    <span className="text-xs font-bold text-slate-400">You</span>
                 </div>
             </div>
         </header>
@@ -490,18 +482,18 @@ function InterviewVideoContent() {
         <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             
             {/* LEFT PANEL - INTERVIEW PROGRESS */}
-            <aside className="w-full lg:w-72 shrink-0 border-r border-slate-800/60 bg-slate-950/30 p-6 flex flex-col overflow-y-auto">
+            <aside className="w-full lg:w-72 shrink-0 border-r border-slate-200/60 bg-slate-50/30 p-6 flex flex-col overflow-y-auto">
                 <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-6">Interview Progress</h3>
                 
                 {question?.question_index !== undefined && question?.total_estimated !== undefined && (
                     <div className="mb-8">
                         <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-white">{question.question_index} of {question.total_estimated} Questions</span>
-                            <span className="text-xs text-emerald-400 font-mono">{Math.round((question.question_index / question.total_estimated) * 100)}%</span>
+                            <span className="text-sm font-semibold text-slate-900">{question.question_index} of {question.total_estimated} Questions</span>
+                            <span className="text-xs text-blue-600 font-mono">{Math.round((question.question_index / question.total_estimated) * 100)}%</span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                             <div 
-                                className="h-full bg-emerald-500 rounded-full transition-all duration-700 ease-out" 
+                                className="h-full bg-blue-600 rounded-full transition-all duration-700 ease-out" 
                                 style={{ width: `${(question.question_index / question.total_estimated) * 100}%` }}
                             />
                         </div>
@@ -514,8 +506,8 @@ function InterviewVideoContent() {
                             const isPast = currentStageIndex > idx
                             const isCurrent = currentStageIndex === idx
                             return (
-                                <div key={stage} className={`flex items-center gap-3 text-sm ${isCurrent ? 'text-white font-medium' : isPast ? 'text-slate-500' : 'text-slate-700'}`}>
-                                    {isPast ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : isCurrent ? <Play className="w-4 h-4 text-emerald-400 fill-current" /> : <Circle className="w-4 h-4" />}
+                                <div key={stage} className={`flex items-center gap-3 text-sm ${isCurrent ? 'text-slate-900 font-medium' : isPast ? 'text-slate-500' : 'text-slate-400'}`}>
+                                    {isPast ? <CheckCircle className="w-4 h-4 text-blue-600" /> : isCurrent ? <Play className="w-4 h-4 text-blue-600 fill-current" /> : <Circle className="w-4 h-4" />}
                                     <span className="capitalize">{stage.replace(/_/g, ' ')}</span>
                                 </div>
                             )
@@ -523,36 +515,36 @@ function InterviewVideoContent() {
                     ) : (
                         // Fallback generic stages
                         <>
-                            <div className={`flex items-center gap-3 text-sm ${question?.stage === 'behavioral' ? 'text-slate-500' : 'text-white font-medium'}`}>
-                                {question?.stage === 'behavioral' ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <Play className="w-4 h-4 text-emerald-400 fill-current" />}
+                            <div className={`flex items-center gap-3 text-sm ${question?.stage === 'behavioral' ? 'text-slate-500' : 'text-slate-900 font-medium'}`}>
+                                {question?.stage === 'behavioral' ? <CheckCircle className="w-4 h-4 text-blue-600" /> : <Play className="w-4 h-4 text-blue-600 fill-current" />}
                                 <span>Technical Assessment</span>
                             </div>
-                            <div className={`flex items-center gap-3 text-sm ${question?.stage === 'behavioral' ? 'text-white font-medium' : 'text-slate-700'}`}>
-                                {question?.stage === 'behavioral' ? <Play className="w-4 h-4 text-emerald-400 fill-current" /> : <Circle className="w-4 h-4" />}
+                            <div className={`flex items-center gap-3 text-sm ${question?.stage === 'behavioral' ? 'text-slate-900 font-medium' : 'text-slate-400'}`}>
+                                {question?.stage === 'behavioral' ? <Play className="w-4 h-4 text-blue-600 fill-current" /> : <Circle className="w-4 h-4" />}
                                 <span>Behavioral Alignment</span>
                             </div>
                         </>
                     )}
                 </div>
 
-                <div className="mt-auto space-y-4 pt-6 border-t border-slate-800/60">
+                <div className="mt-auto space-y-4 pt-6 border-t border-slate-200/60">
                     <div className="flex justify-between items-center">
                         <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Duration</span>
-                        <span className="text-sm text-slate-300 font-mono flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-500" /> {formatDuration(durationSeconds)}</span>
+                        <span className="text-sm text-slate-400 font-mono flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-500" /> {formatDuration(durationSeconds)}</span>
                     </div>
                     {question?.difficulty && (
                         <div className="flex justify-between items-center">
                             <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Difficulty</span>
-                            <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium border border-emerald-500/20">{question.difficulty}</span>
+                            <span className="text-xs text-blue-600 bg-blue-600/10 px-2 py-0.5 rounded font-medium border border-blue-600/20">{question.difficulty}</span>
                         </div>
                     )}
                 </div>
             </aside>
 
             {/* CENTER - PRIMARY INTERVIEW EXPERIENCE */}
-            <section className="flex-1 flex flex-col relative bg-gradient-to-b from-slate-900 via-[#050810] to-[#050810]">
+            <section className="flex-1 flex flex-col relative bg-slate-50 border-r border-slate-200">
                 {/* Voice Status Indicator */}
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-950/80 backdrop-blur border border-slate-800 shadow-lg transition-all duration-300">
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-50/80 backdrop-blur border border-slate-200 shadow-lg transition-all duration-300">
                     {interviewerState === 'SPEAKING' && (
                         <>
                             <Volume2 className="w-4 h-4 text-blue-400 animate-pulse" />
@@ -561,14 +553,14 @@ function InterviewVideoContent() {
                     )}
                     {(interviewerState === 'LISTENING' || interviewerState === 'IDLE') && !isCandidateSpeaking && (
                         <>
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                            <span className="text-xs font-semibold text-slate-300">Listening...</span>
+                            <div className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                            <span className="text-xs font-semibold text-slate-400">Listening...</span>
                         </>
                     )}
                     {isCandidateSpeaking && (
                         <>
-                            <Mic className="w-4 h-4 text-emerald-400 animate-pulse" />
-                            <span className="text-xs font-semibold text-emerald-400">Listening to you...</span>
+                            <Mic className="w-4 h-4 text-blue-600 animate-pulse" />
+                            <span className="text-xs font-semibold text-blue-600">Listening to you...</span>
                         </>
                     )}
                     {interviewerState === 'THINKING' && (
@@ -579,36 +571,30 @@ function InterviewVideoContent() {
                     )}
                 </div>
 
-                <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-12 max-w-4xl mx-auto w-full relative">
-                    {/* Avatar Area */}
-                    <div className="w-48 h-48 md:w-64 md:h-64 mb-10 shrink-0">
-                        <AIInterviewerAvatar state={interviewerState} />
+                <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-8 w-full h-full relative">
+                    {/* Main Video Feed Area */}
+                    <div className="w-full flex-1 flex flex-col items-center justify-center max-w-5xl w-full h-full">
+                        <div className="w-full flex-1 max-h-[80vh] flex flex-col justify-center">
+                            <AIInterviewerAvatar state={interviewerState} />
+                        </div>
                     </div>
 
-                    {/* Current Question */}
-                    <div className="text-center w-full space-y-4 mb-8 flex flex-col items-center justify-center">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Question</h3>
-                        <p className="text-2xl md:text-3xl lg:text-4xl font-medium text-white leading-snug tracking-tight">
-                            {question ? question.question_text : "Preparing your next question..."}
-                        </p>
-                    </div>
-
-                    {/* Candidate Camera (Floating subtly at bottom center/right) */}
-                    <div className="absolute bottom-6 right-6 w-48 md:w-56 transition-transform hover:scale-105 z-20">
+                    {/* Candidate Camera (Floating subtly at bottom right) */}
+                    <div className="absolute bottom-8 right-8 w-56 md:w-72 shadow-2xl rounded-2xl overflow-hidden border-2 border-white/10 transition-transform hover:scale-105 z-20">
                         <CandidateCamera isCandidateSpeaking={isCandidateSpeaking} />
                     </div>
                 </div>
             </section>
 
             {/* RIGHT PANEL - INTERVIEW INSIGHTS & TRANSCRIPT */}
-            <aside className="w-full lg:w-80 shrink-0 border-l border-slate-800/60 bg-slate-950/30 p-6 flex flex-col overflow-y-auto">
+            <aside className="w-full lg:w-80 shrink-0 border-l border-slate-200/60 bg-slate-50/30 p-6 flex flex-col overflow-y-auto">
                 <div className="mb-10 space-y-6">
                     <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4">Current Focus</h3>
                     
-                    <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
+                    <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-4">
                         <div>
                             <span className="block text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Topic</span>
-                            <span className="text-sm font-medium text-slate-200">{question?.topic || 'General'}</span>
+                            <span className="text-sm font-medium text-slate-800">{question?.topic || 'General'}</span>
                         </div>
                         {question?.is_followup && (
                             <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase tracking-wider border border-blue-500/20">
@@ -622,9 +608,9 @@ function InterviewVideoContent() {
                 <div className="flex-1 flex flex-col min-h-[200px]">
                     <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4">Live Transcript</h3>
                     
-                    <div className="flex-1 p-4 rounded-xl bg-slate-900/50 border border-slate-800/60 overflow-y-auto space-y-4 relative">
+                    <div className="flex-1 p-4 rounded-xl bg-white border border-slate-200/60 overflow-y-auto space-y-4 relative shadow-inner">
                         {/* Fake fade out at top */}
-                        <div className="sticky top-0 h-4 bg-gradient-to-b from-slate-900/50 to-transparent w-full" />
+                        <div className="sticky top-0 h-4 bg-gradient-to-b from-white to-transparent w-full" />
                         
                         {!question && !liveTranscript && (
                             <div className="h-full flex items-center justify-center text-center px-4">
@@ -635,14 +621,14 @@ function InterviewVideoContent() {
                         {question && (
                             <div className="space-y-1">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase">AI Interviewer</span>
-                                <p className="text-sm text-slate-300 leading-relaxed">{question.question_text}</p>
+                                <p className="text-sm text-slate-700 leading-relaxed">{question.question_text}</p>
                             </div>
                         )}
 
                         {liveTranscript && (
-                            <div className="space-y-1 pt-4 border-t border-slate-800/50">
-                                <span className="text-[10px] font-bold text-emerald-500 uppercase">You</span>
-                                <p className="text-sm text-slate-300 leading-relaxed">
+                            <div className="space-y-1 pt-4 border-t border-slate-200/50">
+                                <span className="text-[10px] font-bold text-blue-600 uppercase">You</span>
+                                <p className="text-sm text-slate-700 leading-relaxed">
                                     {liveTranscript.includes('[dev-mode-stub]') 
                                         ? "Audio processed successfully (Simulated transcript for demo purposes)."
                                         : liveTranscript}
@@ -656,28 +642,28 @@ function InterviewVideoContent() {
 
         {/* INTERVIEW COMPLETION OVERLAY */}
         {isComplete && (
-            <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-700">
-                <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-10 md:p-14 text-center shadow-2xl relative overflow-hidden">
+            <div className="fixed inset-0 z-50 bg-slate-50/95 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in duration-700">
+                <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-10 md:p-14 text-center shadow-2xl relative overflow-hidden">
                     {/* Glowing background behind success icon */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-emerald-500/20 blur-[100px] rounded-full pointer-events-none" />
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none" />
                     
                     <div className="relative z-10 flex flex-col items-center space-y-6">
-                        <div className="w-24 h-24 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
+                        <div className="w-24 h-24 rounded-full bg-blue-600/10 border border-blue-600/30 flex items-center justify-center text-blue-600 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
                             <Check className="w-12 h-12" />
                         </div>
                         
                         <div className="space-y-3">
-                            <h2 className="text-sm text-emerald-400 uppercase tracking-widest font-bold">Interview Complete</h2>
-                            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Your interview has been completed successfully.</h1>
+                            <h2 className="text-sm text-blue-600 uppercase tracking-widest font-bold">Interview Complete</h2>
+                            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">Your interview has been completed successfully.</h1>
                         </div>
                         
-                        <p className="text-slate-400 max-w-md mx-auto">
+                        <p className="text-slate-500 max-w-md mx-auto">
                             The AI evaluator has finished the assessment. We are now generating your detailed performance report and transitioning to the practical workspace.
                         </p>
 
-                        <div className="mt-8 pt-8 border-t border-slate-800 w-full flex justify-center">
-                            <div className="flex items-center gap-3 text-sm font-medium text-slate-300 bg-slate-950 py-3 px-6 rounded-full border border-slate-800">
-                                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                        <div className="mt-8 pt-8 border-t border-slate-200 w-full flex justify-center">
+                            <div className="flex items-center gap-3 text-sm font-medium text-slate-400 bg-slate-50 py-3 px-6 rounded-full border border-slate-200">
+                                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                                 Processing results...
                             </div>
                         </div>
@@ -692,12 +678,13 @@ function InterviewVideoContent() {
 export default function InterviewPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#050810] flex flex-col items-center justify-center space-y-6">
-        <Loader2 className="w-10 h-10 text-emerald-400 animate-spin" />
-        <p className="text-sm font-medium text-slate-400 tracking-wide uppercase">Initializing Workspace...</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-6">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        <p className="text-sm font-medium text-slate-500 tracking-wide uppercase">Initializing Workspace...</p>
       </div>
     }>
       <InterviewVideoContent />
     </Suspense>
   )
 }
+

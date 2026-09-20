@@ -173,10 +173,17 @@ export const api = {
     resume_text: string;
     job_description?: string;
   }): Promise<SessionInit> {
-    const res = await fetch(`${API_BASE}/assessment/session`, {
+    const apiPayload = {
+      ...payload,
+      skills: [],
+      projects: [],
+      experience: [],
+      experience_years: 2
+    };
+    const res = await fetch(`${API_BASE}/assessment/create`, {
       method: 'POST',
       headers: getHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(apiPayload),
     });
     if (!res.ok) throw new Error('Failed to create assessment session.');
     return res.json();

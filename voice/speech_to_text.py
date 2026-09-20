@@ -48,8 +48,15 @@ class FasterWhisperSTTWrapper:
         from api.config import DEV_MODE
         if DEV_MODE:
             logger.info("DEV_MODE: Returning stub transcript.")
+            import random
+            stubs = [
+                "I've worked with that extensively. It allows for better decoupling of components and improves scalability.",
+                "In my last project, we used that pattern to reduce latency by caching frequent requests.",
+                "The main trade-off there is complexity versus performance. I usually prefer a simpler architecture unless scale demands it.",
+                "I understand the concept, though I haven't used it in production recently. I'd imagine you handle state carefully."
+            ]
             return {
-                "transcript": "[dev-mode-stub]",
+                "transcript": random.choice(stubs),
                 "language": "en",
                 "language_probability": 1.0,
             }
@@ -77,3 +84,4 @@ class FasterWhisperSTTWrapper:
         except Exception as e:
             logger.error(f"Transcription failed: {e}")
             raise
+

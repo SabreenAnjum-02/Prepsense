@@ -19,37 +19,15 @@ class SileroVADWrapper:
         if self._loaded:
             return
 
-        from api.config import DEV_MODE, apply_torch_thread_limit
-        apply_torch_thread_limit()
-
-        if DEV_MODE:
-            logger.info("DEV_MODE: Skipping Silero VAD model load.")
-            self._loaded = True
-            return
-
-        if self.model is None:
-            logger.info("Loading Silero VAD model...")
-            try:
-                # Load silero vad from torch hub
-                self.model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
-                                                   model='silero_vad',
-                                                   force_reload=False,
-                                                   trust_repo=True)
-                (self.get_speech_timestamps, _, _, _, _) = utils
-                self._loaded = True
-                logger.info("Silero VAD model loaded successfully.")
-            except Exception as e:
-                logger.error(f"Failed to load Silero VAD: {e}")
-                raise
-                
-    def is_speech(self, audio_float32: np.ndarray) -> bool:
-        """Detect if the given audio chunk contains speech."""
         from api.config import DEV_MODE
         if DEV_MODE:
-            import numpy as np
             # DEV_MODE: Lightweight RMS volume detection instead of loading Silero AI
             rms = np.sqrt(np.mean(audio_float32**2))
-            return bool(rms > 0.005)
+            # Lower threshold to 0.001 for quiet microphones
+            if rms > 0.001:
+                logger.debug(f'DEV_MODE VAD: Speech detected (RMS: {rms:.4f})')
+                return True
+            return False
 
         if not self._loaded:
             self.load()
@@ -61,7 +39,20 @@ class SileroVADWrapper:
         tensor_chunk = torch.from_numpy(audio_float32).float()
         
         # Silero VAD model returns confidence
+        # It requires exactly 512 samples per call (for 16000Hz)
         with torch.no_grad():
-            speech_prob = self.model(tensor_chunk, self.sample_rate).item()
-            
-        return speech_prob >= self.threshold
+            chunk_size = 512
+            for i in range(0, len(audio_float32), chunk_size):
+                sub_chunk = audio_float32[i:i+chunk_size]
+                if len(sub_chunk) < chunk_size:
+                    # Pad the last chunk with zeros if it's too small
+                    padded = np.zeros(chunk_size, dtype=np.float32)
+                    padded[:len(sub_chunk)] = sub_chunk
+                    sub_chunk = padded
+                    
+                tensor_chunk = torch.from_numpy(sub_chunk).float()
+                speech_prob = self.model(tensor_chunk, self.sample_rate).item()
+                if speech_prob >= self.threshold:
+                    return True
+            return False
+
