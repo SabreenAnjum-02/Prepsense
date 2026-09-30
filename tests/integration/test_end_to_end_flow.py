@@ -63,12 +63,12 @@ async def test_complete_interview_pipeline():
     
     # 4. Mock Interviewer Agent
     mock_question = InterviewQuestion(
-        question_id="q-1", question_text="What is Python?", topic="Python", 
-        difficulty="Medium", question_type="Technical", is_followup=False
+        question_id="q-1", question="What is Python?", topic="Python", 
+        estimated_difficulty="Medium", question_type="Technical", is_followup=False
     )
     mock_question_end = InterviewQuestion(
-        question_id="q-2", question_text="Goodbye.", topic="Python",
-        difficulty="Medium", question_type="Technical", is_followup=False,
+        question_id="q-2", question="Goodbye.", topic="Python",
+        estimated_difficulty="Medium", question_type="Technical", is_followup=False,
         should_end_interview=True
     )
     orchestrator.router._agents["interviewer"].run = AsyncMock(side_effect=[mock_question, mock_question_end])

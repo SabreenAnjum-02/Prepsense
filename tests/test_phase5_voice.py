@@ -40,7 +40,7 @@ def mock_managers():
         # Mock evaluation
         mock_answer_res = MagicMock()
         mock_answer_res.is_completed = False
-        mock_answer_res.next_question.question_text = "Next question please?"
+        mock_answer_res.next_question.question= "Next question please?"
         mock_session_mgr.submit_answer = AsyncMock(return_value=mock_answer_res)
         
         yield mock_session_mgr, mock_vad, mock_stt, mock_tts

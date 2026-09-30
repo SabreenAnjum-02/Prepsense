@@ -21,9 +21,30 @@ class SileroVADWrapper:
 
         from api.config import DEV_MODE
         if DEV_MODE:
-            # DEV_MODE: Lightweight RMS volume detection instead of loading Silero AI
+            logger.info("VAD loaded in DEV_MODE (skipping Silero download)")
+            self._loaded = True
+            return
+
+        logger.info("Loading Silero VAD model...")
+        import os
+        torch_threads = int(os.environ.get("PREPSENSE_TORCH_THREADS", "4"))
+        torch.set_num_threads(torch_threads)
+
+        self.model, utils = torch.hub.load(
+            repo_or_dir='snakers4/silero-vad',
+            model='silero_vad',
+            force_reload=False,
+            trust_repo=True
+        )
+        self.get_speech_timestamps, _, _, _, _ = utils
+        self._loaded = True
+        logger.info("Silero VAD model loaded successfully.")
+
+    def is_speech(self, audio_float32: np.ndarray) -> bool:
+        """Process an audio chunk and return True if it contains speech."""
+        from api.config import DEV_MODE
+        if DEV_MODE:
             rms = np.sqrt(np.mean(audio_float32**2))
-            # Lower threshold to 0.001 for quiet microphones
             if rms > 0.001:
                 logger.debug(f'DEV_MODE VAD: Speech detected (RMS: {rms:.4f})')
                 return True
@@ -35,17 +56,12 @@ class SileroVADWrapper:
         if len(audio_float32) == 0:
             return False
             
-        # Convert to torch tensor
-        tensor_chunk = torch.from_numpy(audio_float32).float()
-        
         # Silero VAD model returns confidence
-        # It requires exactly 512 samples per call (for 16000Hz)
         with torch.no_grad():
             chunk_size = 512
             for i in range(0, len(audio_float32), chunk_size):
                 sub_chunk = audio_float32[i:i+chunk_size]
                 if len(sub_chunk) < chunk_size:
-                    # Pad the last chunk with zeros if it's too small
                     padded = np.zeros(chunk_size, dtype=np.float32)
                     padded[:len(sub_chunk)] = sub_chunk
                     sub_chunk = padded
@@ -55,4 +71,3 @@ class SileroVADWrapper:
                 if speech_prob >= self.threshold:
                     return True
             return False
-

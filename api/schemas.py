@@ -54,7 +54,7 @@ class CreateSessionResponse(BaseModel):
 
 class QuestionData(BaseModel):
     question_id: str
-    question_text: str
+    question: str
     stage: str
     topic: str
     difficulty: str
@@ -192,3 +192,4 @@ class TokenResponse(BaseModel):
     token_type: str = 'bearer'
     candidate_id: str
     name: str
+

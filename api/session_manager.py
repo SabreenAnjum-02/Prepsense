@@ -250,7 +250,7 @@ class SessionManager:
 
         q_record = QuestionRecord(
             question_id=q_id,
-            question=q_text,
+            question_text=q_text,
             topic=q_obj.topic,
             difficulty=q_diff,
             is_followup=q_obj.is_followup
@@ -380,7 +380,7 @@ class SessionManager:
 
             q_record = QuestionRecord(
                 question_id=q_id,
-                question=q_text,
+                question_text=q_text,
                 topic=next_q_obj.topic,
                 difficulty=q_diff,
                 is_followup=next_q_obj.is_followup
@@ -717,4 +717,7 @@ class SessionManager:
 
         session["cached_report"] = final_response
         return final_response
+
+
+
 

@@ -43,7 +43,7 @@ async def test_evaluator_agent_success(mock_scoring, mock_feedback, mock_metrics
     agent = EvaluatorAgent(scoring=mock_scoring, feedback=mock_feedback, metrics=mock_metrics)
     agent._validator = mock_validator
 
-    q = InterviewQuestion(question_id="q-123", question_text="What is Python?", topic="Python", difficulty="Easy", question_type="Technical", is_followup=False)
+    q = InterviewQuestion(question_id="q-123", question="What is Python?", topic="Python", estimated_difficulty="Easy", question_type="Technical", is_followup=False)
     input_data = {
         "question": q,
         "answer": "Python is a language.",

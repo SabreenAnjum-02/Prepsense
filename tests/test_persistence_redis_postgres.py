@@ -1,3 +1,8 @@
+
+import pytest
+import uuid
+from unittest.mock import patch, AsyncMock
+from shared.llm.client import LLMResponse
 import os
 import uuid
 import pytest
@@ -35,7 +40,7 @@ async def test_candidate_creation_and_retrieval():
         repo = CandidateRepository(sess)
         cand = await repo.create(
             name="Alice Smith",
-            email="alice@example.com",
+            email=f"alice_{uuid.uuid4().hex[:8]}@example.com",
             target_role="Frontend Engineer",
             experience_years=4,
             skills=["React", "TypeScript", "Next.js"],
@@ -50,7 +55,7 @@ async def test_candidate_creation_and_retrieval():
         fetched = await repo.get_by_id(cand_id)
         assert fetched is not None
         assert fetched.name == "Alice Smith"
-        assert fetched.email == "alice@example.com"
+        assert fetched.email == cand.email
         assert "React" in fetched.skills
         assert "E-Commerce Storefront" in fetched.projects
 
@@ -65,7 +70,7 @@ async def test_session_lifecycle_persistence():
         cand_repo = CandidateRepository(sess)
         cand = await cand_repo.create(
             name="Bob Jones",
-            email="bob@example.com",
+            email=f"bob_{uuid.uuid4().hex[:8]}@example.com",
             target_role="Backend Software Engineer",
             skills=["Python", "FastAPI", "PostgreSQL"]
         )
@@ -133,7 +138,7 @@ async def test_practical_and_report_persistence():
         cand_repo = CandidateRepository(sess)
         cand = await cand_repo.create(
             name="Charlie Dev",
-            email="charlie@example.com",
+            email=f"charlie_{uuid.uuid4().hex[:8]}@example.com",
             target_role="Full Stack Engineer"
         )
 
@@ -238,7 +243,7 @@ async def test_multi_node_restart_recovery():
     node_a = SessionManager()
     session_id = await node_a.create_session(
         candidate_name="Evan Wright",
-        candidate_email="evan@example.com",
+        candidate_email=f"evan_{uuid.uuid4().hex[:8]}@example.com",
         target_role="Backend Software Engineer",
         skills=["Python", "FastAPI", "PostgreSQL", "Redis"],
         projects=["High-throughput payment gateway"],
@@ -248,7 +253,7 @@ async def test_multi_node_restart_recovery():
 
     q1_data = await node_a.start_interview(session_id)
     assert q1_data.question_id is not None
-    assert len(q1_data.question_text) > 5
+    assert len(q1_data.question) > 5
 
     res1 = await node_a.submit_answer(
         session_id=session_id,
@@ -335,3 +340,11 @@ async def test_session_security_and_isolation():
     bad_id = str(uuid.uuid4())
     bad_sess = await mgr.get_or_restore_session(bad_id)
     assert bad_sess is None
+
+@pytest.fixture(autouse=True)
+def mock_llm_for_persistence():
+    with patch('agents.interviewer.generator.QuestionGenerator.generate_question', new_callable=AsyncMock) as mock_q:
+        from agents.shared.types import InterviewQuestion
+        mock_q.return_value = InterviewQuestion(question="Mocked question?", topic="Test", estimated_difficulty="Medium")
+        yield
+

@@ -80,7 +80,7 @@ Skills: Python, FastAPI, PostgreSQL, Redis, Docker, Microservices, System Design
         self.assertIn("current_question", start_data)
         q1 = start_data["current_question"]
         self.assertEqual(q1["stage"], "INTRODUCTION")
-        print(f"[Test 6: Interview Start] Q1 ({q1['stage']}): {q1['question_text'][:60]}...")
+        print(f"[Test 6: Interview Start] Q1 ({q1['stage']}): {q1['question'][:60]}...")
 
         # 4. Respond to Question 1
         res_resp = self.client.post(
