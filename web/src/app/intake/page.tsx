@@ -109,8 +109,12 @@ export default function IntakePage() {
       localStorage.setItem('prepsense_session_id', session.session_id)
       localStorage.setItem('prepsense_target_role', targetRole)
       localStorage.setItem('prepsense_candidate_name', candidateName)
+      if (session.interview_token) {
+        localStorage.setItem('prepsense_token', session.interview_token)
+      }
 
-      router.push(`/interview?session_id=${session.session_id}`)
+      const tokenParam = session.interview_token ? `&token=${encodeURIComponent(session.interview_token)}` : ''
+      router.push(`/interview?session_id=${session.session_id}${tokenParam}`)
     } catch (err: any) {
       setError(err.message || 'Failed to initialize assessment session.')
       setCreating(false)

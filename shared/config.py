@@ -7,6 +7,7 @@ class ModelConfig(BaseModel):
     model_name: str = Field(default_factory=lambda: os.getenv("MODEL_NAME", "qwen3:8b"))
     temperature: float = Field(default_factory=lambda: float(os.getenv("MODEL_TEMPERATURE", "0.7")))
     max_tokens: int = Field(default_factory=lambda: int(os.getenv("MODEL_MAX_TOKENS", "2000")))
+    ollama_url: str = Field(default_factory=lambda: os.getenv("OLLAMA_URL", "http://localhost:11434"))
 
 class LoggingConfig(BaseModel):
     level: str = Field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))

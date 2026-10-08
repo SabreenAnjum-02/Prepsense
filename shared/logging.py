@@ -25,6 +25,11 @@ class InterceptHandler(logging.Handler):
 
 def setup_production_logging():
     """Configure Loguru for production JSON output and intercept standard logs."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     # Remove standard loguru handlers
     logger.remove()
 

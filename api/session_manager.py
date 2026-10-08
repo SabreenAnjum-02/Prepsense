@@ -250,6 +250,7 @@ class SessionManager:
 
         q_record = QuestionRecord(
             question_id=q_id,
+            question=q_text,
             question_text=q_text,
             topic=q_obj.topic,
             difficulty=q_diff,
@@ -297,6 +298,7 @@ class SessionManager:
 
         return QuestionData(
             question_id=q_id,
+            question=q_text,
             question_text=q_text,
             stage=q_stage,
             topic=q_obj.topic,
@@ -380,6 +382,7 @@ class SessionManager:
 
             q_record = QuestionRecord(
                 question_id=q_id,
+                question=q_text,
                 question_text=q_text,
                 topic=next_q_obj.topic,
                 difficulty=q_diff,
@@ -391,6 +394,7 @@ class SessionManager:
 
             next_q_data = QuestionData(
                 question_id=q_id,
+                question=q_text,
                 question_text=q_text,
                 stage=q_stage,
                 topic=q_record.topic,
@@ -718,6 +722,6 @@ class SessionManager:
         session["cached_report"] = final_response
         return final_response
 
-
-
+# Global singleton to prevent session divergence across modules
+global_session_manager = SessionManager()
 

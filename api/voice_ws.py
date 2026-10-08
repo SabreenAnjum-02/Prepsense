@@ -1,22 +1,28 @@
 import logging
 import asyncio
-import time
 import json
 import numpy as np
+import time
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from api.session_manager import SessionManager
+from api.session_manager import global_session_manager as session_mgr
+from api.auth import SECRET_KEY, ALGORITHM
 from voice.vad import SileroVADWrapper
 from voice.speech_to_text import FasterWhisperSTTWrapper
 from voice.text_to_speech import KokoroTTSWrapper
-import scipy.signal
 from jose import jwt, JWTError
-from api.auth import SECRET_KEY, ALGORITHM
 
 logger = logging.getLogger(__name__)
+
 ws_router = APIRouter()
 
-session_mgr = SessionManager()
-ACTIVE_SESSIONS = {}
+ACTIVE_SESSIONS: Dict[str, WebSocket] = {}
+ACTIVE_PIPELINES: Dict[str, Any] = {}
+
+# Global singletons for voice models to avoid reloading on every websocket connection
+global_vad = SileroVADWrapper()
+global_stt = FasterWhisperSTTWrapper()
+global_tts = KokoroTTSWrapper()
 
 class VoicePipelineSession:
     def __init__(self, websocket: WebSocket, session_id: str):
@@ -34,9 +40,9 @@ class VoicePipelineSession:
         self.samples_per_chunk = int(16000 * (self.chunk_duration_ms / 1000.0))
         self.bytes_per_chunk = self.samples_per_chunk * 2 
         
-        self.vad = SileroVADWrapper()
-        self.stt = FasterWhisperSTTWrapper()
-        self.tts = KokoroTTSWrapper()
+        self.vad = global_vad
+        self.stt = global_stt
+        self.tts = global_tts
         
         self.interruption_event = asyncio.Event()
 
@@ -74,7 +80,7 @@ class VoicePipelineSession:
                 await self.ws.send_bytes(audio_chunk)
                 
                 # simulate real-time playback delay so we can be interrupted
-                chunk_dur = len(audio_chunk) / (24000 * 2) 
+                chunk_dur = len(audio_chunk) / (16000 * 2) 
                 await asyncio.sleep(chunk_dur * 0.9)
                 
             if not self.interruption_event.is_set() and self.state == "INTERVIEWER_SPEAKING":
@@ -117,91 +123,143 @@ class VoicePipelineSession:
             res = await session_mgr.submit_answer(self.session_id, transcript)
             
             # Reset expected turn to the new question
-            self.expected_turn_id = res.question_id
+            if res.next_question:
+                self.expected_turn_id = res.next_question.question_id
+                # ── Fix: Actually send the new question to the frontend! ──
+                await self.ws.send_json({
+                    "type": "question",
+                    "text": res.next_question.question,
+                    "question_id": res.next_question.question_id,
+                    "stage": res.current_stage
+                })
+            else:
+                self.expected_turn_id = None
             
-            if getattr(res, 'is_completed', False) or res.stage == "CLOSING":
+            if getattr(res, 'is_completed', False) or res.current_stage == "CLOSING":
                 await self.ws.send_json({"type": "completed"})
-                await self.play_tts(res.next_question.question)
+                if res.next_question:
+                    await self.play_tts(res.next_question.question)
                 return
                 
             # Play AI's next question
-            asyncio.create_task(self.play_tts(res.next_question.question))
+            if res.next_question:
+                asyncio.create_task(self.play_tts(res.next_question.question))
             
         except Exception as e:
             logger.error(f"[{self.session_id}] Pipeline error: {e}")
             await self.send_state("LISTENING")
 
-def _safe_get_current_question_id(session: dict) -> str:
+def _safe_get_current_question_id(session: dict) -> Optional[str]:
+    if not isinstance(session, dict):
+        return None
     current_q = session.get("current_question")
-    if not current_q:
-        hist = session.get("context", {}).get("topics", {}).get("history", [])
-        if hist:
-            current_q = hist[-1].question_id
-    elif hasattr(current_q, "question_id"):
-        return current_q.question_id
-    elif isinstance(current_q, dict):
-        return current_q.get("question_id")
-    return current_q if isinstance(current_q, str) else None
+    if current_q:
+        if hasattr(current_q, "question_id"):
+            return getattr(current_q, "question_id")
+        elif isinstance(current_q, dict):
+            return current_q.get("question_id")
+        elif isinstance(current_q, str):
+            return current_q
+
+    context = session.get("context")
+    if context:
+        questions = getattr(context, "questions", None)
+        if questions is None and isinstance(context, dict):
+            questions = context.get("questions")
+        if questions:
+            last_q = questions[-1]
+            return getattr(last_q, "question_id", None) or (last_q.get("question_id") if isinstance(last_q, dict) else None)
+    return None
 
 @ws_router.websocket("/ws/interview/{session_id}/audio")
 async def voice_websocket_endpoint(websocket: WebSocket, session_id: str, token: str = Query(None)):
     if not token:
+        logger.warning(f"WebSocket rejected for session {session_id}: Missing authentication token")
         await websocket.close(code=4001, reason="Missing authentication token")
         return
         
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
+        token_session_id = payload.get("session_id")
         if not email:
-            raise JWTError()
-    except JWTError:
-        await websocket.close(code=4001, reason="Invalid authentication token")
+            logger.warning(f"WebSocket rejected for session {session_id}: Token missing sub claim")
+            await websocket.close(code=4001, reason="Invalid token claims")
+            return
+        if not token_session_id or token_session_id != session_id:
+            logger.warning(f"WebSocket rejected for session {session_id}: Token session mismatch (expected {session_id}, got {token_session_id})")
+            await websocket.close(code=4001, reason="Token not valid for this session")
+            return
+    except JWTError as e:
+        logger.warning(f"WebSocket rejected for session {session_id}: JWT error ({e})")
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    # Verify session exists and is active before accepting
+    session = await session_mgr.get_or_restore_session(session_id)
+    if not session:
+        logger.warning(f"WebSocket rejected for session {session_id}: Session not found")
+        await websocket.close(code=4001, reason="Session not found")
+        return
+        
+    status = getattr(session, 'status', session.get('status') if isinstance(session, dict) else '')
+    if status == "completed":
+        logger.warning(f"WebSocket rejected for session {session_id}: Session already completed")
+        await websocket.close(code=4001, reason="Session completed")
+        return
+
+    if session_id in ACTIVE_SESSIONS:
+        logger.warning(f"Duplicate connection attempt for session {session_id}")
+        await websocket.close(code=4001, reason="Session already active on another connection")
         return
 
     await websocket.accept()
-    
-    if session_id in ACTIVE_SESSIONS:
-        logger.warning(f"Duplicate connection attempt for session {session_id}")
-        await websocket.send_json({"type": "error", "message": "Session already active on another connection."})
-        await websocket.close(code=4001)
-        return
-        
-    session = await session_mgr.get_or_restore_session(session_id)
-    status = getattr(session, 'status', session.get('status') if isinstance(session, dict) else '')
-    if not session or status == "completed":
-        await websocket.send_json({"type": "error", "message": "Invalid or expired session."})
-        await websocket.close(code=4001)
-        return
-        
     ACTIVE_SESSIONS[session_id] = websocket
     
+    pipeline = VoicePipelineSession(websocket, session_id)
+    pipeline.is_connected = True
+    ACTIVE_PIPELINES[session_id] = pipeline
+    
     try:
-        pipeline = VoicePipelineSession(websocket, session_id)
-        pipeline.is_connected = True
-        
+        # ── Fix #3: Set initial pipeline state based on whether a question already exists ──
+        # When this WS connects BEFORE _bg_start() finishes generating Question 1,
+        # current_question will be None. We send PROCESSING to hold the client in a
+        # waiting state. We do NOT allow speech until expected_turn_id is populated.
+        # When this WS reconnects AFTER a question already exists (e.g. session recovery),
+        # we replay that question and begin TTS immediately.
         current_q = _safe_get_current_question_id(session)
         pipeline.expected_turn_id = current_q
-        
+
         if pipeline.expected_turn_id:
-            q_text = "I'm ready. Let's continue."
+            # Session reconnect: question already generated, replay it
             current_q_obj = session.get("current_question")
-            if hasattr(current_q_obj, "question"):
-                q_text = current_q_obj.question
-            elif isinstance(current_q_obj, dict) and "question" in current_q_obj:
-                q_text = current_q_obj["question"]
-            else:
-                hist = session.get("context", {}).get("topics", {}).get("history", [])
-                for hist_q in hist:
-                    hist_q_id = getattr(hist_q, "question_id", None) or (hist_q.get("question_id") if isinstance(hist_q, dict) else None)
-                    if hist_q_id == current_q and hist_q:
-                        q_text = hist_q
-                        break
+            q_text = getattr(current_q_obj, "question", None) if current_q_obj else None
+            if not q_text and isinstance(current_q_obj, dict):
+                q_text = current_q_obj.get("question")
+            if not q_text:
+                q_text = "Welcome back. Let's continue the interview."
+            logger.info(f"[{session_id}] WS connected after question ready — replaying question.")
             await websocket.send_json({"type": "question", "text": q_text})
-            
-        await pipeline.send_state("LISTENING")
+            asyncio.create_task(pipeline.play_tts(q_text))
+        else:
+            # First connect before _bg_start has finished: hold in PROCESSING
+            # _bg_start() will send the question event and call play_tts once ready.
+            logger.info(f"[{session_id}] WS connected — first question not yet ready. Holding in PROCESSING.")
+            await pipeline.send_state("PROCESSING")
         
+        # ── Main audio receive loop ──
         while True:
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except Exception as recv_exc:
+                # receive() itself raised: connection is gone
+                logger.info(f"[{session_id}] WebSocket receive raised: {recv_exc}")
+                break
+
+            # Starlette signals disconnect via a disconnect message type, not an exception
+            if message.get("type") == "websocket.disconnect":
+                logger.info(f"[{session_id}] WebSocket disconnect message received. Exiting loop.")
+                break
             
             if "bytes" in message:
                 pcm16_data = message["bytes"]
@@ -209,17 +267,27 @@ async def voice_websocket_endpoint(websocket: WebSocket, session_id: str, token:
                 if len(pcm16_data) % 2 != 0 or len(pcm16_data) > 64000:
                     continue
 
+                # ── Fix #3 core: do NOT accept audio while no active question exists ──
+                # This prevents silent/spurious audio from triggering evaluation when
+                # the first question has not yet been delivered.
+                if not pipeline.expected_turn_id:
+                    # Still waiting for _bg_start() to populate the first question
+                    continue
+
                 if pipeline.state == "PROCESSING":
                     continue
 
-                if pipeline.state == "INTERVIEWER_SPEAKING":
-                    pipeline.interruption_event.set()
-                    await pipeline.send_state("CANDIDATE_SPEAKING")
-                    pipeline.audio_buffer.clear()
-                    pipeline.silence_chunks = 0
-
                 audio_np = np.frombuffer(pcm16_data, dtype=np.int16).astype(np.float32) / 32768.0
                 is_speech_now = pipeline.vad.is_speech(audio_np)
+
+                if pipeline.state == "INTERVIEWER_SPEAKING":
+                    if is_speech_now:
+                        pipeline.interruption_event.set()
+                        await pipeline.send_state("CANDIDATE_SPEAKING")
+                        pipeline.audio_buffer.clear()
+                        pipeline.silence_chunks = 0
+                    else:
+                        continue
 
                 if is_speech_now:
                     if pipeline.state == "LISTENING":
@@ -232,7 +300,10 @@ async def voice_websocket_endpoint(websocket: WebSocket, session_id: str, token:
                         pipeline.silence_chunks += 1
                         
                         if pipeline.silence_chunks > 15:
-                            await pipeline.handle_candidate_speech_end()
+                            # State transition must happen synchronously before task scheduling
+                            # to prevent multiple tasks from being spawned
+                            pipeline.state = "PROCESSING"
+                            asyncio.create_task(pipeline.handle_candidate_speech_end())
                             pipeline.silence_chunks = 0
             
             elif "text" in message:
@@ -245,10 +316,15 @@ async def voice_websocket_endpoint(websocket: WebSocket, session_id: str, token:
                         asyncio.create_task(pipeline.play_tts(text))
                     
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for session {session_id}")
+        logger.info(f"[{session_id}] WebSocket disconnected.")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"[{session_id}] WebSocket error: {e}")
     finally:
         pipeline.is_connected = False
         if session_id in ACTIVE_SESSIONS:
             del ACTIVE_SESSIONS[session_id]
+        if session_id in ACTIVE_PIPELINES:
+            del ACTIVE_PIPELINES[session_id]
+
+
+

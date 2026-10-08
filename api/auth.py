@@ -43,6 +43,18 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+def create_interview_token(session_id: str, email: str, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a cryptographically signed, short-lived JWT scoped specifically to an interview session."""
+    if expires_delta is None:
+        expires_delta = timedelta(hours=2)  # 2-hour active interview window
+    to_encode = {
+        "sub": email,
+        "session_id": session_id,
+        "type": "interview_access",
+    }
+    return create_access_token(to_encode, expires_delta=expires_delta)
+
+
 async def get_db_session():
     async with db_manager.session() as session:
         yield session

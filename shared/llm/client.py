@@ -123,8 +123,8 @@ class _JsonStringExtractor:
 class OllamaClient:
     """Asynchronous client for interacting with a local Ollama LLM instance."""
     
-    def __init__(self, base_url: str = "http://host.docker.internal:11434"):
-        self.base_url = os.getenv("OLLAMA_URL", base_url)
+    def __init__(self, base_url: Optional[str] = None):
+        self.base_url = base_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
         self.model = config.model.model_name
         self._ensure_aiohttp()
 
@@ -233,6 +233,31 @@ class OllamaClient:
         except aiohttp.ClientError as e:
             raise LLMConnectionError(f"Failed to connect to Ollama: {e}")
 
+    async def prewarm(self, prompt: str = "hi", system_prompt: str = "") -> None:
+        """Issue a minimal background request to force the model into VRAM/RAM and pre-compute KV cache."""
+        if aiohttp is None:
+            return
+        
+        logger.info(f"OllamaClient: Pre-warming model '{self.model}' in background...")
+        url = f"{self.base_url}/api/generate"
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"num_predict": 1}
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, timeout=120) as response:
+                    if response.status == 200:
+                        logger.info(f"OllamaClient: Pre-warm complete for '{self.model}'. Model is loaded.")
+        except Exception as e:
+            logger.warning(f"OllamaClient: Pre-warm failed: {e}")
+
+
     @with_retry(max_retries=3, delay=1.0)
     async def generate_stream(
         self,
@@ -327,6 +352,8 @@ class OllamaClient:
                             continue
 
                         token_text = chunk.get("response", "")
+                        if not token_text:
+                            continue
                         accumulated_text += token_text
                         token_count += 1
 
@@ -395,16 +422,23 @@ class OllamaClient:
         if request.require_json:
             try:
                 clean_text = accumulated_text.strip()
-                if clean_text.startswith("```json"):
-                    clean_text = clean_text[7:]
-                if clean_text.endswith("```"):
-                    clean_text = clean_text[:-3]
+                if "```json" in clean_text:
+                    clean_text = clean_text.split("```json", 1)[1].split("```", 1)[0].strip()
+                elif "```" in clean_text:
+                    clean_text = clean_text.split("```", 1)[1].split("```", 1)[0].strip()
+                elif "{" in clean_text and "}" in clean_text:
+                    clean_text = clean_text[clean_text.find("{"):clean_text.rfind("}")+1]
                 parsed_json = json.loads(clean_text)
             except json.JSONDecodeError as e:
-                logger.error(f"[LLM_STREAM] Final JSON validation failed: {e}")
-                raise LLMFormatError(
-                    f"Invalid JSON from streamed response: {e}"
-                )
+                logger.warning(f"[LLM_STREAM] JSON parse failed on raw text ({e}). Checking extractor completed keys...")
+                if extractor.completed_keys:
+                    parsed_json = extractor.completed_keys
+                    logger.info(f"[LLM_STREAM] Successfully recovered JSON from streaming extractor: {parsed_json}")
+                else:
+                    logger.error(f"[LLM_STREAM] Final JSON validation failed: {e}")
+                    raise LLMFormatError(
+                        f"Invalid JSON from streamed response: {e}"
+                    )
 
         # Compute tokens/sec from Ollama metadata
         eval_dur_sec = final_meta.get("eval_duration", 0) / 1e9

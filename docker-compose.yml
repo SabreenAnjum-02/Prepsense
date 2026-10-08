@@ -30,6 +30,10 @@ services:
       dockerfile: Dockerfile
     expose:
       - "8000"
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -39,6 +43,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://prepsense_user:prepsense_password@db:5432/prepsense_db
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=production
+      - OLLAMA_URL=http://host.docker.internal:11434
       # - GEMINI_API_KEY=your_api_key_here
     volumes:
       - ./rag/db:/app/rag/db
@@ -52,8 +57,11 @@ services:
       dockerfile: Dockerfile
     expose:
       - "3000"
+    ports:
+      - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost/api
+      - BACKEND_URL=http://backend:8000
     depends_on:
       - backend
 

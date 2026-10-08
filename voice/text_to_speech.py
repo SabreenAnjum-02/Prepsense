@@ -34,8 +34,17 @@ class KokoroTTSWrapper:
                 # Import kokoro dynamically to allow graceful failure if not installed
                 from kokoro import KPipeline
                 self.pipeline = KPipeline(lang_code='a') # 'a' for American English
+                
+                # Run a dummy inference to force PyTorch compilation and voice tensor download
+                logger.info("Running Kokoro dummy inference to pre-warm the model...")
+                generator = self.pipeline("Hello", voice=self.voice, speed=1.0)
+                try:
+                    next(generator)
+                except StopIteration:
+                    pass
+                
                 self._loaded = True
-                logger.info("Kokoro TTS model loaded successfully.")
+                logger.info("Kokoro TTS model loaded and pre-warmed successfully.")
             except ImportError:
                 logger.error("Kokoro TTS not installed. Please install it via 'pip install kokoro'.")
                 raise
@@ -113,8 +122,13 @@ class KokoroTTSWrapper:
                     else:
                         audio_np = audio
                         
-                    # Yield raw Float32 bytes
-                    yield audio_np.tobytes()
+                    # Resample from 24000Hz (Kokoro native) to 16000Hz (Web Audio pipeline) and convert to int16 PCM
+                    import scipy.signal
+                    target_samples = int(len(audio_np) * 16000 / self.sample_rate)
+                    if target_samples > 0:
+                        resampled = scipy.signal.resample(audio_np, target_samples).astype(np.float32)
+                        pcm16 = (np.clip(resampled, -1.0, 1.0) * 32767.0).astype(np.int16)
+                        yield pcm16.tobytes()
                     
         except Exception as e:
             logger.error(f"Kokoro TTS generation failed: {e}")

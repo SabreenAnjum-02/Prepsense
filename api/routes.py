@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import io
 from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends, BackgroundTasks
+from api.voice_ws import ACTIVE_SESSIONS, ACTIVE_PIPELINES
 from fastapi.security import OAuth2PasswordRequestForm
 from agents.shared.roles import RoleArchetype, ROLE_BLUEPRINTS
 from agents.planner.topic_selector import TopicSelector
@@ -11,6 +13,7 @@ from .auth import (
     get_password_hash,
     verify_password,
     create_access_token,
+    create_interview_token,
     get_current_candidate,
     get_db_session
 )
@@ -34,13 +37,12 @@ from .schemas import (
     CandidateRegisterRequest,
     TokenResponse
 )
-from .session_manager import SessionManager
+from .session_manager import global_session_manager as session_mgr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
-session_mgr = SessionManager()
 
 
 @router.post("/auth/register", response_model=TokenResponse)
@@ -243,8 +245,37 @@ async def match_job_description(request: JDMatchRequest):
 
 
 @router.post("/assessment/create", response_model=CreateSessionResponse)
-async def create_assessment(request: CreateSessionRequest):
+async def create_assessment(request: CreateSessionRequest, background_tasks: BackgroundTasks):
     """Initialize a new adaptive interview assessment session."""
+    # ── Fix #2: Pre-warm the LLM model in the background with the actual resume context ──
+    # This forces Ollama to pre-compute the KV cache for the largest part of the prompt,
+    # reducing TTFT from ~90s to <5s for the first LLM question.
+    from shared.llm.client import OllamaClient
+    
+    skills_str = ", ".join(request.skills) if request.skills else "General technical skills"
+    projects_str = "; ".join(request.projects) if request.projects else "Engineering projects"
+    exp_str = "; ".join(request.experience) if request.experience else "Professional experience"
+    jd_str = request.job_description if request.job_description else "Standard role competencies"
+
+    candidate_profile_block = (
+        "CANDIDATE RESUME & ROLE CONTEXT:\n"
+        f"- Candidate Name: {request.candidate_name}\n"
+        f"- Target Role: {request.target_role}\n"
+        f"- Resume Skills & Stack: {skills_str}\n"
+        f"- Projects on Resume: {projects_str}\n"
+        f"- Experience Summary: {exp_str}\n"
+        f"- Job Description Focus: {jd_str[:300]}\n\n"
+    )
+    
+    prompt_prefix = (
+        f"You are a Senior Principal Interviewer conducting an authentic, conversational technical interview with {request.candidate_name} for the position of {request.target_role}.\n\n"
+        f"{candidate_profile_block}"
+        f"INTERVIEW STATE:\n"
+    )
+    sys_prompt = "You are an expert, authentic technical interviewer. Think concisely and return ONLY valid JSON with conversational_filler and question."
+    
+    background_tasks.add_task(OllamaClient().prewarm, prompt=prompt_prefix, system_prompt=sys_prompt)
+
     session_id = await session_mgr.create_session(
         candidate_name=request.candidate_name,
         candidate_email=request.candidate_email,
@@ -255,12 +286,14 @@ async def create_assessment(request: CreateSessionRequest):
         experience=request.experience,
         job_description=request.job_description
     )
+    interview_token = create_interview_token(session_id, request.candidate_email)
     return CreateSessionResponse(
         session_id=session_id,
         candidate_name=request.candidate_name,
         target_role=request.target_role,
         total_stages=5,
-        stage_order=["INTRODUCTION", "TECHNICAL", "PROJECTS", "BEHAVIORAL", "HR"]
+        stage_order=["INTRODUCTION", "TECHNICAL", "PROJECTS", "BEHAVIORAL", "HR"],
+        interview_token=interview_token
     )
 
 
@@ -313,13 +346,69 @@ async def get_session_state(session_id: str):
 
 
 @router.post("/assessment/{session_id}/start", response_model=StartInterviewResponse)
-async def start_interview(session_id: str):
-    """Begin interview and generate Question 1."""
+async def start_interview(session_id: str, background_tasks: BackgroundTasks):
+    """Begin interview and generate Question 1 in background."""
     try:
-        q_data = await session_mgr.start_interview(session_id)
+        # Check if session exists
+        session = await session_mgr.get_or_restore_session(session_id)
+        if not session:
+            raise KeyError("Session not found")
+            
+        async def _bg_start():
+            try:
+                # ── Fix #3: Wait for the WebSocket connection to be established ──
+                # The frontend calls connectWebSocketAndAudio() THEN api.startInterview()
+                # in sequence, so the WS should already be up or connect within ms.
+                # We wait up to 10 seconds to be safe (cold-boot microphone permission dialogs).
+                pipeline = None
+                for _ in range(100):  # 10s max (100 * 100ms)
+                    pipeline = ACTIVE_PIPELINES.get(session_id)
+                    if pipeline and pipeline.is_connected:
+                        break
+                    await asyncio.sleep(0.1)
+
+                # Generate the first question (slow: ~60s on cold Qwen)
+                # The pipeline is already in PROCESSING state (set by voice_ws.py on connect),
+                # so the client shows "Analyzing..." and audio is silently dropped.
+                q_data = await session_mgr.start_interview(session_id)
+                
+                # Re-acquire pipeline reference after generation (WS might have reconnected)
+                pipeline = ACTIVE_PIPELINES.get(session_id)
+                if pipeline and pipeline.is_connected:
+                    # ── Set expected_turn_id BEFORE sending the question event ──
+                    # This atomically unblocks the audio receive loop. Any audio received
+                    # after this point will be correctly associated with q_data.question_id.
+                    pipeline.expected_turn_id = q_data.question_id
+                    await pipeline.ws.send_json({
+                        "type": "question",
+                        "question_id": q_data.question_id,
+                        "text": q_data.question,
+                        "stage": q_data.stage,
+                        "topic": q_data.topic,
+                        "difficulty": q_data.difficulty,
+                        "question_index": q_data.question_index,
+                        "total_estimated": q_data.total_estimated,
+                        "is_followup": q_data.is_followup
+                    })
+                    await pipeline.play_tts(q_data.question)
+                else:
+                    logger.warning(f"[{session_id}] Question generated but WebSocket is gone. Question will be replayed on reconnect.")
+            except Exception as e:
+                logger.error(f"[{session_id}] Background generation error: {e}")
+                # Notify client if still connected
+                pipeline = ACTIVE_PIPELINES.get(session_id)
+                if pipeline and pipeline.is_connected:
+                    try:
+                        await pipeline.ws.send_json({"type": "error", "message": "Failed to generate first question. Please retry."})
+                        await pipeline.send_state("LISTENING")
+                    except Exception:
+                        pass
+
+        background_tasks.add_task(_bg_start)
+        
         return StartInterviewResponse(
             session_id=session_id,
-            current_question=q_data,
+            current_question=None,
             stage="INTRODUCTION"
         )
     except KeyError:
@@ -387,4 +476,6 @@ async def get_final_report(session_id: str):
     except Exception as e:
         logger.error(f"Error generating final report: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 

@@ -1,5 +1,6 @@
 import time
 import logging
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import router
@@ -7,6 +8,8 @@ from .routes import router
 from contextlib import asynccontextmanager
 from database.connection import db_manager, redis_manager
 from shared.logging import setup_production_logging
+from api.voice_ws import global_vad, global_stt, global_tts
+from api.rate_limiter import rate_limiter
 
 # Configure logging
 setup_production_logging()
@@ -20,6 +23,14 @@ async def lifespan(app: FastAPI):
         await db_manager.init_tables()
         await redis_manager.get_client()
         logger.info("PrepSense API: Database tables and Redis connections initialized.")
+        
+        # Preload voice ML models in the background to avoid blocking the first interview
+        logger.info("PrepSense API: Preloading ML Voice models...")
+        await asyncio.to_thread(global_vad.load)
+        await asyncio.to_thread(global_stt.load)
+        await asyncio.to_thread(global_tts.load)
+        logger.info("PrepSense API: ML Voice models preloaded successfully.")
+        
     except Exception as e:
         logger.error(f"PrepSense API: Startup initialization error: {e}")
     yield

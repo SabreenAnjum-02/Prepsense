@@ -137,6 +137,25 @@ class QuestionGenerator:
         # Stage-specific guidance
         stage_guidance = ""
         if stage == "INTRODUCTION":
+            if not context.questions:
+                # ── Fix #2: Fast-path for the very first question to avoid LLM cold-start latency ──
+                cand = context.candidate_profile
+                c_name = cand.name.split()[0] if cand and cand.name else "there"
+                role = cand.target_role if cand and cand.target_role else "this role"
+                
+                logger.info("Using fast-path templated question for INTRODUCTION to bypass LLM latency.")
+                return InterviewQuestion(
+                    conversational_filler=f"Hi {c_name}, welcome to your interview.",
+                    question=f"To get us started, could you briefly introduce yourself and walk me through your background and experience as it relates to {role}?",
+                    topic="Introduction",
+                    estimated_difficulty="Easy",
+                    question_type="Behavioral",
+                    is_followup=False,
+                    follow_up_questions=[],
+                    expected_topics=["Introduction", "Background", "Experience"],
+                    should_end_interview=False
+                )
+
             stage_guidance = (
                 "Ask the classic opening interview question: invite the candidate to introduce themselves, "
                 "walk through their professional journey, and highlight their background with the technologies on their resume."
@@ -231,9 +250,9 @@ class QuestionGenerator:
         
         request = LLMRequest(
             prompt=prompt,
-            system_prompt="You are an expert, authentic technical interviewer. Return ONLY valid JSON with conversational_filler and question.",
+            system_prompt="You are an expert, authentic technical interviewer. Think concisely and return ONLY valid JSON with conversational_filler and question.",
             temperature=temp,
-            max_tokens=180,
+            max_tokens=1500,
             require_json=True
         )
         

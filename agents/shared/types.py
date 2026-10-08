@@ -26,11 +26,22 @@ class CandidateProfile(BaseModel):
 
 class QuestionRecord(BaseModel):
     question_id: str
-    question: str
+    question: str = ""
+    question_text: Optional[str] = None
     topic: str
     difficulty: str
     is_followup: bool = False
     timestamp: datetime = Field(default_factory=datetime.now)
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_question_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            q = data.get("question") or data.get("question_text") or ""
+            data["question"] = q
+            if not data.get("question_text"):
+                data["question_text"] = q
+        return data
 
 class AnswerRecord(BaseModel):
     question_id: str

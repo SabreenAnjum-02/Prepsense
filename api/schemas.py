@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class HealthResponse(BaseModel):
@@ -50,11 +50,13 @@ class CreateSessionResponse(BaseModel):
     target_role: str
     total_stages: int = 5
     stage_order: List[str] = Field(default_factory=list)
+    interview_token: str
 
 
 class QuestionData(BaseModel):
     question_id: str
-    question: str
+    question: str = ""
+    question_text: Optional[str] = None
     stage: str
     topic: str
     difficulty: str
@@ -62,10 +64,20 @@ class QuestionData(BaseModel):
     total_estimated: int = 10
     is_followup: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def sync_question(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            q = data.get("question") or data.get("question_text") or ""
+            data["question"] = q
+            if not data.get("question_text"):
+                data["question_text"] = q
+        return data
+
 
 class StartInterviewResponse(BaseModel):
     session_id: str
-    current_question: QuestionData
+    current_question: Optional[QuestionData] = None
     stage: str
 
 
@@ -192,4 +204,5 @@ class TokenResponse(BaseModel):
     token_type: str = 'bearer'
     candidate_id: str
     name: str
+
 

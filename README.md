@@ -138,3 +138,9 @@ python -m pytest tests/test_model_lifecycle.py tests/test_phase5_voice.py tests/
 ## 📄 License
 
 PrepSense is licensed under the MIT License.
+
+## Recent Stabilization & Fixes
+- **Audio Pipeline Pre-warming**: Added Kokoro TTS dummy inference to startup routine to eliminate the 15-second cold-start latency that previously caused the VAD to falsely interrupt the first question.
+- **WebSocket Resilience**: Fixed a critical TCP buffer overflow issue by moving the LLM evaluation (handle_candidate_speech_end) into an asynchronous background task, unblocking the WebSocket receive loop and preventing the connection from dropping after 2 minutes.
+- **VAD Interruption Fix**: Repositioned the Voice Activity Detection check to run *before* evaluating interruptions, ensuring that background noise no longer cancels the AI's speech playback.
+- **Session State Singleton**: Unified the SessionManager into a global singleton to prevent split-brain state issues during Redis fallback.

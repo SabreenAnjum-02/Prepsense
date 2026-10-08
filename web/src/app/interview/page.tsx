@@ -205,8 +205,11 @@ function InterviewVideoContent() {
       if (wsHost.includes('3000')) {
           wsHost = wsHost.replace('3000', '8000');
       }
-      const token = localStorage.getItem('prepsense_token');
-      const wsUrl = `${protocol}//${wsHost}/api/ws/interview/${sessionId}/audio${token ? `?token=${token}` : ''}`;
+      const token = searchParams.get('token') || (typeof window !== 'undefined' ? localStorage.getItem('prepsense_token') : null);
+      if (token && typeof window !== 'undefined') {
+          localStorage.setItem('prepsense_token', token);
+      }
+      const wsUrl = `${protocol}//${wsHost}/api/ws/interview/${sessionId}/audio${token ? `?token=${encodeURIComponent(token)}` : ''}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -346,16 +349,8 @@ function InterviewVideoContent() {
       await connectWebSocketAndAudio();
 
       // Start the interview session in the backend
-      const startRes = await api.startInterview(sessionId)
-      setQuestion(startRes.current_question)
-      
-      // Let backend handle TTS for first question
-      setTimeout(() => {
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ type: "play_question", text: startRes.current_question.question_text }));
-          }
-      }, 500);
-      
+      await api.startInterview(sessionId)
+      // Question state and TTS handled by WS
       setLoadingInitial(false)
     } catch (err: any) {
       setError(err.message || 'Failed to start interview.')
@@ -687,4 +682,5 @@ export default function InterviewPage() {
     </Suspense>
   )
 }
+
 

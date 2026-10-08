@@ -25,6 +25,7 @@ export interface SessionInit {
   target_role: string;
   total_stages: number;
   stage_order: string[];
+  interview_token?: string;
 }
 
 export interface QuestionData {
@@ -189,7 +190,7 @@ export const api = {
     return res.json();
   },
 
-  async startInterview(sessionId: string): Promise<{ session_id: string; current_question: QuestionData; stage: string }> {
+  async startInterview(sessionId: string): Promise<{ session_id: string; current_question: QuestionData | null; stage: string }> {
     const res = await fetch(`${API_BASE}/assessment/${sessionId}/start`, { 
       method: 'POST',
       headers: getHeaders()
@@ -236,3 +237,4 @@ export const api = {
     return res.json();
   }
 };
+
